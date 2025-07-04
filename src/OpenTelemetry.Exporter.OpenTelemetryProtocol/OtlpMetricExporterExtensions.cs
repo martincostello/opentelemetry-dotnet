@@ -62,7 +62,7 @@ public static class OtlpMetricExporterExtensions
 
         return builder.AddReader(sp =>
         {
-            OtlpExporterOptions exporterOptions;
+            IOptionsMonitor<OtlpExporterOptions> exporterOptions;
 
             if (name == null)
             {

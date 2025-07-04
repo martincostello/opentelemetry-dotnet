@@ -5,6 +5,7 @@
 using System.Net.Http;
 #endif
 using System.Net.Http.Headers;
+using Microsoft.Extensions.Options;
 
 namespace OpenTelemetry.Exporter.OpenTelemetryProtocol.Implementation.ExportClient;
 
@@ -14,8 +15,8 @@ internal sealed class OtlpHttpExportClient : OtlpExportClient
     internal static readonly MediaTypeHeaderValue MediaHeaderValue = new("application/x-protobuf");
     private static readonly ExportClientHttpResponse SuccessExportResponse = new(success: true, deadlineUtc: default, response: null, exception: null);
 
-    internal OtlpHttpExportClient(OtlpExporterOptions options, HttpClient httpClient, string signalPath)
-        : base(options, httpClient, signalPath)
+    internal OtlpHttpExportClient(IOptionsMonitor<OtlpExporterOptions> optionsMonitor, HttpClient httpClient, string signalPath)
+        : base(optionsMonitor, httpClient, signalPath)
     {
     }
 

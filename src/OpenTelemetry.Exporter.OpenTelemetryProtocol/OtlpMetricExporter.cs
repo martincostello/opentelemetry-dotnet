@@ -3,6 +3,7 @@
 
 using System.Buffers.Binary;
 using System.Diagnostics;
+using Microsoft.Extensions.Options;
 using OpenTelemetry.Exporter.OpenTelemetryProtocol.Implementation;
 using OpenTelemetry.Exporter.OpenTelemetryProtocol.Implementation.Serializer;
 using OpenTelemetry.Exporter.OpenTelemetryProtocol.Implementation.Transmission;
@@ -33,28 +34,37 @@ public class OtlpMetricExporter : BaseExporter<Metric>
     /// </summary>
     /// <param name="options">Configuration options for the exporter.</param>
     public OtlpMetricExporter(OtlpExporterOptions options)
-        : this(options, experimentalOptions: new(), transmissionHandler: null)
+        : this(FrozenOptionsMonitor.Create(options), experimentalOptions: new(), transmissionHandler: null)
     {
     }
 
     /// <summary>
     /// Initializes a new instance of the <see cref="OtlpMetricExporter"/> class.
     /// </summary>
-    /// <param name="exporterOptions"><see cref="OtlpExporterOptions"/>.</param>
+    /// <param name="optionsMonitor">Configuration options for the exporter.</param>
+    public OtlpMetricExporter(IOptionsMonitor<OtlpExporterOptions> optionsMonitor)
+        : this(optionsMonitor, experimentalOptions: new(), transmissionHandler: null)
+    {
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="OtlpMetricExporter"/> class.
+    /// </summary>
+    /// <param name="optionsMonitor"><see cref="OtlpExporterOptions"/>.</param>
     /// <param name="experimentalOptions"><see cref="ExperimentalOptions"/>.</param>
     /// <param name="transmissionHandler"><see cref="OtlpExporterTransmissionHandler"/>.</param>
     internal OtlpMetricExporter(
-        OtlpExporterOptions exporterOptions,
+        IOptionsMonitor<OtlpExporterOptions> optionsMonitor,
         ExperimentalOptions experimentalOptions,
         OtlpExporterTransmissionHandler? transmissionHandler = null)
     {
-        Debug.Assert(exporterOptions != null, "exporterOptions was null");
+        Debug.Assert(optionsMonitor != null, "exporterOptions was null");
         Debug.Assert(experimentalOptions != null, "experimentalOptions was null");
 
 #pragma warning disable CS0618 // Suppressing gRPC obsolete warning
-        this.startWritePosition = exporterOptions!.Protocol == OtlpExportProtocol.Grpc ? GrpcStartWritePosition : 0;
+        this.startWritePosition = optionsMonitor!.CurrentValue.Protocol == OtlpExportProtocol.Grpc ? GrpcStartWritePosition : 0;
 #pragma warning restore CS0618 // Suppressing gRPC obsolete warning
-        this.transmissionHandler = transmissionHandler ?? exporterOptions!.GetExportTransmissionHandler(experimentalOptions!, OtlpSignalType.Metrics);
+        this.transmissionHandler = transmissionHandler ?? optionsMonitor!.GetExportTransmissionHandler(experimentalOptions!, OtlpSignalType.Metrics);
     }
 
     internal Resource Resource => this.resource ??= this.ParentProvider.GetResource();

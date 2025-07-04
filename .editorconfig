@@ -10,6 +10,10 @@ indent_size = 2
 insert_final_newline = true
 trim_trailing_whitespace = true
 
+# Visual Studio Spell Checker
+spelling_exclusion_path = .\exclusion.dic
+spelling_languages = en-us
+
 [*.sh]
 end_of_line = lf
 

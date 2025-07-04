@@ -5,6 +5,7 @@
 using System.Net.Http;
 #endif
 using System.Net.Http.Headers;
+using Microsoft.Extensions.Options;
 using OpenTelemetry.Exporter.OpenTelemetryProtocol.Implementation.ExportClient.Grpc;
 
 namespace OpenTelemetry.Exporter.OpenTelemetryProtocol.Implementation.ExportClient;
@@ -24,8 +25,8 @@ internal sealed class OtlpGrpcExportClient : OtlpExportClient
             status: null,
             grpcStatusDetailsHeader: null);
 
-    public OtlpGrpcExportClient(OtlpExporterOptions options, HttpClient httpClient, string signalPath)
-        : base(options, httpClient, signalPath)
+    public OtlpGrpcExportClient(IOptionsMonitor<OtlpExporterOptions> optionsMonitor, HttpClient httpClient, string signalPath)
+        : base(optionsMonitor, httpClient, signalPath)
     {
     }
 

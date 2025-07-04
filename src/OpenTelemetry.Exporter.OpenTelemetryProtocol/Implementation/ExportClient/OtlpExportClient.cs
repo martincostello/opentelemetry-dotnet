@@ -5,6 +5,7 @@
 using System.Net.Http;
 #endif
 using System.Net.Http.Headers;
+using Microsoft.Extensions.Options;
 using OpenTelemetry.Internal;
 
 namespace OpenTelemetry.Exporter.OpenTelemetryProtocol.Implementation.ExportClient;
@@ -21,11 +22,13 @@ internal abstract class OtlpExportClient : IExportClient
             && !OperatingSystem.IsBrowser();
 #endif
 
-    protected OtlpExportClient(OtlpExporterOptions options, HttpClient httpClient, string signalPath)
+    protected OtlpExportClient(IOptionsMonitor<OtlpExporterOptions> optionsMonitor, HttpClient httpClient, string signalPath)
     {
-        Guard.ThrowIfNull(options);
+        Guard.ThrowIfNull(optionsMonitor);
         Guard.ThrowIfNull(httpClient);
         Guard.ThrowIfNull(signalPath);
+
+        var options = optionsMonitor.CurrentValue;
 
         Uri exporterEndpoint;
 #pragma warning disable CS0618 // Suppressing gRPC obsolete warning
@@ -42,15 +45,17 @@ internal abstract class OtlpExportClient : IExportClient
         }
 
         this.Endpoint = new UriBuilder(exporterEndpoint).Uri;
-        this.Headers = options.GetHeaders<Dictionary<string, string>>((d, k, v) => d.Add(k, v));
+        this.Headers = GetHttpHeaders(options);
         this.HttpClient = httpClient;
+
+        optionsMonitor.OnChange((o) => this.Headers = GetHttpHeaders(o));
     }
 
     internal HttpClient HttpClient { get; }
 
     internal Uri Endpoint { get; }
 
-    internal IReadOnlyDictionary<string, string> Headers { get; }
+    internal IReadOnlyDictionary<string, string> Headers { get; private set; }
 
     internal abstract MediaTypeHeaderValue MediaTypeHeader { get; }
 
@@ -78,7 +83,8 @@ internal abstract class OtlpExportClient : IExportClient
 #endif
         }
 
-        foreach (var header in this.Headers)
+        var headers = this.Headers;
+        foreach (var header in headers)
         {
             request.Headers.Add(header.Key, header.Value);
         }
@@ -92,15 +98,17 @@ internal abstract class OtlpExportClient : IExportClient
     }
 
     protected HttpResponseMessage SendHttpRequest(HttpRequestMessage request, CancellationToken cancellationToken)
-    {
+        =>
 #if NET
         // Note: SendAsync must be used with HTTP/2 because synchronous send is
         // not supported.
-        return this.RequireHttp2 || !SynchronousSendSupportedByCurrentPlatform
+        this.RequireHttp2 || !SynchronousSendSupportedByCurrentPlatform
             ? this.HttpClient.SendAsync(request, cancellationToken).GetAwaiter().GetResult()
             : this.HttpClient.Send(request, cancellationToken);
 #else
-        return this.HttpClient.SendAsync(request, cancellationToken).GetAwaiter().GetResult();
+        this.HttpClient.SendAsync(request, cancellationToken).GetAwaiter().GetResult();
 #endif
-    }
+
+    private static Dictionary<string, string> GetHttpHeaders(OtlpExporterOptions options) =>
+        options.GetHeaders<Dictionary<string, string>>((d, k, v) => d.Add(k, v));
 }

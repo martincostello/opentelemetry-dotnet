@@ -3,6 +3,7 @@
 
 using System.Buffers.Binary;
 using System.Diagnostics;
+using Microsoft.Extensions.Options;
 using OpenTelemetry.Exporter.OpenTelemetryProtocol.Implementation;
 using OpenTelemetry.Exporter.OpenTelemetryProtocol.Implementation.Serializer;
 using OpenTelemetry.Exporter.OpenTelemetryProtocol.Implementation.Transmission;
@@ -33,31 +34,40 @@ public class OtlpTraceExporter : BaseExporter<Activity>
     /// </summary>
     /// <param name="options">Configuration options for the export.</param>
     public OtlpTraceExporter(OtlpExporterOptions options)
-        : this(options, sdkLimitOptions: new(), experimentalOptions: new(), transmissionHandler: null)
+        : this(FrozenOptionsMonitor.Create(options), sdkLimitOptions: new(), experimentalOptions: new(), transmissionHandler: null)
     {
     }
 
     /// <summary>
     /// Initializes a new instance of the <see cref="OtlpTraceExporter"/> class.
     /// </summary>
-    /// <param name="exporterOptions"><see cref="OtlpExporterOptions"/>.</param>
+    /// <param name="optionsMonitor">Configuration options for the export.</param>
+    public OtlpTraceExporter(IOptionsMonitor<OtlpExporterOptions> optionsMonitor)
+        : this(optionsMonitor, sdkLimitOptions: new(), experimentalOptions: new(), transmissionHandler: null)
+    {
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="OtlpTraceExporter"/> class.
+    /// </summary>
+    /// <param name="optionsMonitor"><see cref="OtlpExporterOptions"/>.</param>
     /// <param name="sdkLimitOptions"><see cref="SdkLimitOptions"/>.</param>
     /// <param name="experimentalOptions"><see cref="ExperimentalOptions"/>.</param>
     /// <param name="transmissionHandler"><see cref="OtlpExporterTransmissionHandler"/>.</param>
     internal OtlpTraceExporter(
-        OtlpExporterOptions exporterOptions,
+        IOptionsMonitor<OtlpExporterOptions> optionsMonitor,
         SdkLimitOptions sdkLimitOptions,
         ExperimentalOptions experimentalOptions,
         OtlpExporterTransmissionHandler? transmissionHandler = null)
     {
-        Debug.Assert(exporterOptions != null, "exporterOptions was null");
+        Debug.Assert(optionsMonitor != null, "exporterOptions was null");
         Debug.Assert(sdkLimitOptions != null, "sdkLimitOptions was null");
 
         this.sdkLimitOptions = sdkLimitOptions!;
 #pragma warning disable CS0618 // Suppressing gRPC obsolete warning
-        this.startWritePosition = exporterOptions!.Protocol == OtlpExportProtocol.Grpc ? GrpcStartWritePosition : 0;
+        this.startWritePosition = optionsMonitor!.CurrentValue.Protocol == OtlpExportProtocol.Grpc ? GrpcStartWritePosition : 0;
 #pragma warning restore CS0618 // Suppressing gRPC obsolete warning
-        this.transmissionHandler = transmissionHandler ?? exporterOptions!.GetExportTransmissionHandler(experimentalOptions, OtlpSignalType.Traces);
+        this.transmissionHandler = transmissionHandler ?? optionsMonitor!.GetExportTransmissionHandler(experimentalOptions, OtlpSignalType.Traces);
     }
 
     internal Resource Resource => this.resource ??= this.ParentProvider.GetResource();

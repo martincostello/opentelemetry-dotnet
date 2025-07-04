@@ -6,6 +6,7 @@ using System.Net.Http;
 #endif
 using System.Diagnostics;
 using System.Reflection;
+using Microsoft.Extensions.Options;
 using OpenTelemetry.Exporter.OpenTelemetryProtocol.Implementation;
 using OpenTelemetry.Exporter.OpenTelemetryProtocol.Implementation.ExportClient;
 using OpenTelemetry.Exporter.OpenTelemetryProtocol.Implementation.Transmission;
@@ -68,16 +69,16 @@ internal static class OtlpExporterOptionsExtensions
         return headers;
     }
 
-    public static OtlpExporterTransmissionHandler GetExportTransmissionHandler(this OtlpExporterOptions options, ExperimentalOptions experimentalOptions, OtlpSignalType otlpSignalType)
+    public static OtlpExporterTransmissionHandler GetExportTransmissionHandler(this IOptionsMonitor<OtlpExporterOptions> optionsMonitor, ExperimentalOptions experimentalOptions, OtlpSignalType otlpSignalType)
     {
-        var exportClient = GetExportClient(options, otlpSignalType);
+        var exportClient = GetExportClient(optionsMonitor, otlpSignalType);
 
         // `HttpClient.Timeout.TotalMilliseconds` would be populated with the correct timeout value for both the exporter configuration cases:
         // 1. User provides their own HttpClient. This case is straightforward as the user wants to use their `HttpClient` and thereby the same client's timeout value.
         // 2. If the user configures timeout via the exporter options, then the timeout set for the `HttpClient` initialized by the exporter will be set to user provided value.
         double timeoutMilliseconds = exportClient is OtlpHttpExportClient httpTraceExportClient
             ? httpTraceExportClient.HttpClient.Timeout.TotalMilliseconds
-            : options.TimeoutMilliseconds;
+            : optionsMonitor.CurrentValue.TimeoutMilliseconds;
 
         if (experimentalOptions.EnableInMemoryRetry)
         {
@@ -98,8 +99,9 @@ internal static class OtlpExporterOptionsExtensions
         }
     }
 
-    public static IExportClient GetExportClient(this OtlpExporterOptions options, OtlpSignalType otlpSignalType)
+    public static IExportClient GetExportClient(this IOptionsMonitor<OtlpExporterOptions> optionsMonitor, OtlpSignalType otlpSignalType)
     {
+        var options = optionsMonitor.CurrentValue;
         var httpClient = options.HttpClientFactory?.Invoke() ?? throw new InvalidOperationException("OtlpExporterOptions was missing HttpClientFactory or it returned null.");
 
 #pragma warning disable CS0618 // Suppressing gRPC obsolete warning
@@ -111,16 +113,16 @@ internal static class OtlpExporterOptionsExtensions
         return otlpSignalType switch
         {
             OtlpSignalType.Traces => options.Protocol == OtlpExportProtocol.Grpc
-                ? new OtlpGrpcExportClient(options, httpClient, TraceGrpcServicePath)
-                : new OtlpHttpExportClient(options, httpClient, TraceHttpServicePath),
+                ? new OtlpGrpcExportClient(optionsMonitor, httpClient, TraceGrpcServicePath)
+                : new OtlpHttpExportClient(optionsMonitor, httpClient, TraceHttpServicePath),
 
             OtlpSignalType.Metrics => options.Protocol == OtlpExportProtocol.Grpc
-                ? new OtlpGrpcExportClient(options, httpClient, MetricsGrpcServicePath)
-                : new OtlpHttpExportClient(options, httpClient, MetricsHttpServicePath),
+                ? new OtlpGrpcExportClient(optionsMonitor, httpClient, MetricsGrpcServicePath)
+                : new OtlpHttpExportClient(optionsMonitor, httpClient, MetricsHttpServicePath),
 
             OtlpSignalType.Logs => options.Protocol == OtlpExportProtocol.Grpc
-                ? new OtlpGrpcExportClient(options, httpClient, LogsGrpcServicePath)
-                : new OtlpHttpExportClient(options, httpClient, LogsHttpServicePath),
+                ? new OtlpGrpcExportClient(optionsMonitor, httpClient, LogsGrpcServicePath)
+                : new OtlpHttpExportClient(optionsMonitor, httpClient, LogsHttpServicePath),
 
             _ => throw new NotSupportedException($"OtlpSignalType {otlpSignalType} is not supported."),
         };

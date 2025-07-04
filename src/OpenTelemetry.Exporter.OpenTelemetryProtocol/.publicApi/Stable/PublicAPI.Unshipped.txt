@@ -1,0 +1,3 @@
+OpenTelemetry.Exporter.OtlpLogExporter.OtlpLogExporter(Microsoft.Extensions.Options.IOptionsMonitor<OpenTelemetry.Exporter.OtlpExporterOptions!>! optionsMonitor) -> void
+OpenTelemetry.Exporter.OtlpMetricExporter.OtlpMetricExporter(Microsoft.Extensions.Options.IOptionsMonitor<OpenTelemetry.Exporter.OtlpExporterOptions!>! optionsMonitor) -> void
+OpenTelemetry.Exporter.OtlpTraceExporter.OtlpTraceExporter(Microsoft.Extensions.Options.IOptionsMonitor<OpenTelemetry.Exporter.OtlpExporterOptions!>! optionsMonitor) -> void
