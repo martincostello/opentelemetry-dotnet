@@ -11,7 +11,7 @@
       https://github.com/advisories/GHSA-hh2w-p6rv-4g7w.
       Remove this if Coyote publishes a fixed version.
     -->
-    <PackageReference Include="System.Text.Json" VersionOverride="8.0.6" Condition="'$(TargetFramework)' == 'net8.0'" />
+    <PackageReference Include="System.Text.Json" VersionOverride="8.0.6" Condition="!$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'net10.0'))" />
   </ItemGroup>
 
 </Project>
