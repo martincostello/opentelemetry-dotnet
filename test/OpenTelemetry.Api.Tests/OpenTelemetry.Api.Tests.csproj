@@ -4,13 +4,8 @@
     <Description>Unit test project for OpenTelemetry.Api</Description>
     <TargetFrameworks>$(TargetFrameworksForTests)</TargetFrameworks>
     <NoWarn>$(NoWarn),CS0618</NoWarn>
+    <ReferenceCoyotePackages>true</ReferenceCoyotePackages>
   </PropertyGroup>
-
-  <ItemGroup>
-    <PackageReference Include="Microsoft.Coyote" />
-    <!-- NU1510 -->
-    <!-- Workaround to avoid https://github.com/advisories/GHSA-hh2w-p6rv-4g7w -->
-  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="$(RepoRoot)\src\OpenTelemetry.Api\OpenTelemetry.Api.csproj" />
