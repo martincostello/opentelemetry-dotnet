@@ -8,7 +8,7 @@
     <!--
       System.Text.Json is an indirect reference through Coyote which flags
       the GitHub Security Advisories listed below. However, if we reference
-      System.Text.Json directly, the .NET 10 SDK will generate a NU1510 
+      System.Text.Json directly, the .NET 10 SDK will generate a NU1510
       warning that the package reference is redundant and will be pruned,
       so instead just suppress the advisories as the in-box version will
       be selected and will be a patched version with no vulnerability.
