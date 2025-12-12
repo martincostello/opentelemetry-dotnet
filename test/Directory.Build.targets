@@ -2,4 +2,8 @@
 
   <Import Project="$([MSBuild]::GetDirectoryNameOfFileAbove($(MSBuildProjectDirectory), 'OpenTelemetry.slnx'))\build\Common.targets" />
 
+  <ItemGroup Condition="'$(ReferenceCoyotePackages)' == 'true'">
+    <PackageReference Include="Microsoft.Coyote" />
+  </ItemGroup>
+
 </Project>

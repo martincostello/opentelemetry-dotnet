@@ -4,6 +4,7 @@
     <Description>Unit test project for OpenTelemetry.Api</Description>
     <TargetFrameworks>$(TargetFrameworksForTests)</TargetFrameworks>
     <NoWarn>$(NoWarn),CS0618</NoWarn>
+    <ReferenceCoyotePackages>true</ReferenceCoyotePackages>
   </PropertyGroup>
 
   <ItemGroup>
