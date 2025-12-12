@@ -4,8 +4,13 @@
     <Description>Unit test project for OpenTelemetry.Api</Description>
     <TargetFrameworks>$(TargetFrameworksForTests)</TargetFrameworks>
     <NoWarn>$(NoWarn),CS0618</NoWarn>
-    <ReferenceCoyotePackages>true</ReferenceCoyotePackages>
   </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Coyote" />
+    <!-- Workaround to avoid https://github.com/advisories/GHSA-hh2w-p6rv-4g7w -->
+    <PackageReference Include="System.Text.Json" VersionOverride="8.0.6" Condition="!$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'net10.0'))" />
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="$(RepoRoot)\src\OpenTelemetry.Api\OpenTelemetry.Api.csproj" />
