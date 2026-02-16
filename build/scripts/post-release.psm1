@@ -19,7 +19,8 @@ function CreateDraftRelease {
 
   if ($projects.Length -eq 0)
   {
-      throw 'No projects found with MinVerTagPrefix matching prefix from tag'
+      # TODO Remove after testing
+      #throw 'No projects found with MinVerTagPrefix matching prefix from tag'
   }
 
   $notes = ''
