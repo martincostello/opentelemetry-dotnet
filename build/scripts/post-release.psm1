@@ -111,7 +111,6 @@ The following changes are from the previous release [$previousVersion](https://g
 
     gh release create $tag $releaseFiles `
       --title $tag `
-      --verify-tag `
       --notes $notes `
       --latest `
       --draft
