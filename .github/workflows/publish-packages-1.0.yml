@@ -63,7 +63,7 @@ jobs:
     - name: Generate SBOM
       uses: anchore/sbom-action@28d71544de8eaf1b958d335707167c5f783590ad # v0.22.2
       with:
-        output-file: ./artifacts/sbom.spdx.json
+        output-file: ./artifacts/package/release/sbom.spdx.json
         path: ./artifacts/bin
         upload-artifact: false
         upload-release-assets: false
@@ -172,10 +172,8 @@ jobs:
       uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
       with:
         name: ${{ github.ref_name }}-packages
+        path: ./artifacts/package/release
         if-no-files-found: error
-        path: |
-          ./artifacts/package/release
-          ./artifacts/sbom.spdx.json
 
     - name: Publish MyGet
       working-directory: ./artifacts/package/release
