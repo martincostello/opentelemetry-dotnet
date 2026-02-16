@@ -60,14 +60,6 @@ jobs:
       shell: pwsh
       run: dotnet build ./build/OpenTelemetry.proj --configuration Release --no-restore -p:Deterministic=true -p:"BuildNumber=${env:GITHUB_RUN_NUMBER}" -p:RunningDotNetPack=true
 
-    - name: Generate SBOM
-      uses: anchore/sbom-action@28d71544de8eaf1b958d335707167c5f783590ad # v0.22.2
-      with:
-        output-file: ./artifacts/package/release/sbom.spdx.json
-        path: ./artifacts/bin
-        upload-artifact: false
-        upload-release-assets: false
-
     - name: Sign DLLs with Cosign Keyless
       shell: pwsh
       run: |
@@ -166,6 +158,14 @@ jobs:
             }
             Write-Output "Signature verification succeeded for $dllFilePath"
         }
+
+    - name: Generate SBOM
+      uses: anchore/sbom-action@28d71544de8eaf1b958d335707167c5f783590ad # v0.22.2
+      with:
+        output-file: ./artifacts/package/release/sbom.spdx.json
+        path: ./artifacts/bin
+        upload-artifact: false
+        upload-release-assets: false
 
     - name: Publish Artifacts
       id: upload-artifacts
