@@ -192,10 +192,16 @@ jobs:
     - automation
     - build-pack-publish
 
-    if: needs.automation.outputs.enabled && github.event_name == 'push'
+    # TODO Remove after testing
+    permissions:
+      contents: write
+
+    # TODO Remove after testing
+    #if: needs.automation.outputs.enabled && github.event_name == 'push'
 
     steps:
     - uses: actions/create-github-app-token@29824e69f54612133e76f7eaac726eef6c875baf # v2.2.1
+      if: false # TODO Remove after testing
       id: otelbot-token
       with:
         app-id: ${{ vars.OTELBOT_DOTNET_APP_ID }}
@@ -204,7 +210,9 @@ jobs:
     - name: Check out code
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       with:
-        token: ${{ steps.otelbot-token.outputs.token }}
+        #token: ${{ steps.otelbot-token.outputs.token }}
+        # TODO Remove after testing
+        token: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Download Artifacts
       uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
@@ -216,7 +224,9 @@ jobs:
     - name: Create GitHub Release draft
       shell: pwsh
       env:
-        GH_TOKEN: ${{ steps.otelbot-token.outputs.token }}
+        #GH_TOKEN: ${{ steps.otelbot-token.outputs.token }}
+        # TODO Remove after testing
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         Import-Module .\build\scripts\post-release.psm1
 
@@ -227,6 +237,7 @@ jobs:
 
     - name: Post notice when packages are ready
       shell: pwsh
+      if: false # TODO Remove after testing
       env:
         GH_TOKEN: ${{ steps.otelbot-token.outputs.token }}
         EXPECTED_PR_AUTHOR_USER_NAME: ${{ needs.automation.outputs.application-name }}
