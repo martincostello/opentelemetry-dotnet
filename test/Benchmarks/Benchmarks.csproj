@@ -16,8 +16,12 @@
   </ItemGroup>
 
   <ItemGroup Condition="'$(TargetFrameworkIdentifier)' == '.NETCoreApp'">
-    <PackageReference Include="Grpc.AspNetCore.Server" />
+    <EmbeddedResource Include="EndToEnd\*.Dockerfile" LogicalName="%(FileName)%(Extension)" />
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="Grpc.AspNetCore.Server" />
+    <PackageReference Include="Testcontainers" />
+    <PackageReference Include="Testcontainers.MsSql" />
+    <ProjectReference Include="..\Benchmarks.App\Benchmarks.App.csproj" />
   </ItemGroup>
 
   <ItemGroup>
