@@ -217,6 +217,7 @@
   <Project Path="src/OpenTelemetry.Extensions.Propagators/OpenTelemetry.Extensions.Propagators.csproj" />
   <Project Path="src/OpenTelemetry.Shims.OpenTracing/OpenTelemetry.Shims.OpenTracing.csproj" />
   <Project Path="src/OpenTelemetry/OpenTelemetry.csproj" />
+  <Project Path="test/Benchmarks.App/Benchmarks.App.csproj" />
   <Project Path="test/Benchmarks/Benchmarks.csproj" />
   <Project Path="test/OpenTelemetry.AotCompatibility.TestApp/OpenTelemetry.AotCompatibility.TestApp.csproj" />
   <Project Path="test/OpenTelemetry.Api.ProviderBuilderExtensions.Tests/OpenTelemetry.Api.ProviderBuilderExtensions.Tests.csproj" />
