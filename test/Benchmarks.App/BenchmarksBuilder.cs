@@ -18,7 +18,7 @@ internal static class BenchmarksBuilder
     {
         builder.Logging.ClearProviders();
 
-        if (string.Equals(builder.Configuration["Benchmarks:EnableTelemetry"], bool.TrueString, StringComparison.OrdinalIgnoreCase))
+        if (!string.Equals(builder.Configuration["OTEL_SDK_DISABLED"], bool.TrueString, StringComparison.OrdinalIgnoreCase))
         {
             builder.Logging.AddOpenTelemetry();
 

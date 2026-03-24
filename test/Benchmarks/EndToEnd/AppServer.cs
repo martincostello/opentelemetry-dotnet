@@ -51,8 +51,8 @@ internal sealed class AppServer : IAsyncDisposable
 
         var config = new List<KeyValuePair<string, string?>>()
         {
-            KeyValuePair.Create<string, string?>("Benchmarks:EnableTelemetry", enableTelemetry.ToString()),
             KeyValuePair.Create<string, string?>("ConnectionStrings:SqlServer", this.sqlServer.DatabaseContainer.GetConnectionString()),
+            KeyValuePair.Create<string, string?>("OTEL_SDK_DISABLED", (!enableTelemetry).ToString()),
         };
 
         if (enableTelemetry)
