@@ -6,6 +6,7 @@ using System.Collections.Frozen;
 #endif
 using System.Diagnostics;
 using System.Globalization;
+using System.Runtime.CompilerServices;
 
 namespace OpenTelemetry.Metrics;
 
@@ -90,18 +91,19 @@ public struct Exemplar
 
         this.Timestamp = DateTimeOffset.UtcNow;
 
+        var measurementValue = measurement.Value;
         if (typeof(T) == typeof(long))
         {
-            this.LongValue = (long)(object)measurement.Value;
+            this.LongValue = Unsafe.As<T, long>(ref measurementValue);
         }
         else if (typeof(T) == typeof(double))
         {
-            this.DoubleValue = (double)(object)measurement.Value;
+            this.DoubleValue = Unsafe.As<T, double>(ref measurementValue);
         }
         else
         {
             Debug.Fail("Invalid value type");
-            this.DoubleValue = Convert.ToDouble(measurement.Value, CultureInfo.InvariantCulture);
+            this.DoubleValue = Convert.ToDouble(measurementValue, CultureInfo.InvariantCulture);
         }
 
         var currentActivity = Activity.Current;
