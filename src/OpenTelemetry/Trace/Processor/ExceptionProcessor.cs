@@ -46,18 +46,17 @@ internal sealed class ExceptionProcessor : BaseProcessor<Activity>
     /// <inheritdoc />
     public override void OnEnd(Activity activity)
     {
+        var snapshot = activity.GetTagValue(ExceptionPointersKey) as IntPtr?;
+        if (snapshot != null)
+        {
+            activity.SetTag(ExceptionPointersKey, null);
+        }
+
         var pointers = this.fnGetExceptionPointers();
 
         if (pointers == IntPtr.Zero)
         {
             return;
-        }
-
-        var snapshot = activity.GetTagValue(ExceptionPointersKey) as IntPtr?;
-
-        if (snapshot != null)
-        {
-            activity.SetTag(ExceptionPointersKey, null);
         }
 
         if (snapshot != pointers)

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using System.Diagnostics.Metrics;
+using System.Reflection;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Tests;
 using Xunit;
@@ -11,12 +12,8 @@ namespace OpenTelemetry.Exporter.Prometheus.Tests;
 public sealed class PrometheusCollectionManagerTests
 {
     [Theory]
-    [InlineData(0, true)] // disable cache, default value for HttpListener
-    [InlineData(0, false)] // disable cache, default value for HttpListener
-#if PROMETHEUS_ASPNETCORE
-    [InlineData(300, true)] // default value for AspNetCore, no possibility to set on HttpListener
-    [InlineData(300, false)] // default value for AspNetCore, no possibility to set on HttpListener
-#endif
+    [InlineData(300, true)] // default value for HttpListener
+    [InlineData(300, false)] // default value for HttpListener
     public async Task EnterExitCollectTest(int scrapeResponseCacheDurationMilliseconds, bool openMetricsRequested)
     {
         var testTimeout = TimeSpan.FromMinutes(1);
@@ -203,6 +200,29 @@ public sealed class PrometheusCollectionManagerTests
                 Assert.Equal(firstResponse.CollectionResponse.GeneratedAtUtc, response.CollectionResponse.GeneratedAtUtc);
             }
         }
+    }
+
+    [Fact]
+    public async Task WaitForReadersToCompleteWaitsForActiveReaders()
+    {
+        using var exporter = new PrometheusExporter(new PrometheusExporterOptions());
+        var manager = new PrometheusCollectionManager(exporter);
+        var readerCount = typeof(PrometheusCollectionManager).GetField("readerCount", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        var waitForReadersToComplete = typeof(PrometheusCollectionManager).GetMethod("WaitForReadersToComplete", BindingFlags.Instance | BindingFlags.NonPublic)!;
+
+        readerCount.SetValue(manager, 1);
+
+        var waitTask = Task.Run(() => waitForReadersToComplete.Invoke(manager, null));
+        var completedTask = await Task.WhenAny(waitTask, Task.Delay(TimeSpan.FromSeconds(1)));
+        var completed = completedTask == waitTask;
+
+        Assert.False(completed);
+        Assert.Equal(1, readerCount.GetValue(manager));
+
+        readerCount.SetValue(manager, 0);
+        completedTask = await Task.WhenAny(waitTask, Task.Delay(TimeSpan.FromSeconds(1)));
+        Assert.True(completedTask == waitTask);
+        await waitTask;
     }
 
     private sealed class Response

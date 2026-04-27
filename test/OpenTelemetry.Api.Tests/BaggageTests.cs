@@ -174,6 +174,33 @@ public class BaggageTests
         Assert.DoesNotContain(new KeyValuePair<string, string>(K2, V2), baggage4.GetBaggage());
     }
 
+    [Fact(Skip = "Pending fix.")]
+    public async Task CurrentIsIsolatedAcrossAsyncFlows()
+    {
+        Baggage.ClearBaggage();
+        Baggage.SetBaggage(K1, V1);
+
+        await Task.Factory.StartNew(
+            () =>
+            {
+                Assert.Equal(V1, Baggage.GetBaggage(K1));
+                Assert.Null(Baggage.GetBaggage(K2));
+
+                Baggage.SetBaggage(K2, V2);
+
+                Assert.Equal(V1, Baggage.GetBaggage(K1));
+                Assert.Equal(V2, Baggage.GetBaggage(K2));
+            },
+            CancellationToken.None,
+            TaskCreationOptions.None,
+            TaskScheduler.Default);
+
+        Assert.Equal(V1, Baggage.GetBaggage(K1));
+        Assert.Null(Baggage.GetBaggage(K2));
+
+        Baggage.ClearBaggage();
+    }
+
     [Fact]
     public void EnumeratorTest()
     {

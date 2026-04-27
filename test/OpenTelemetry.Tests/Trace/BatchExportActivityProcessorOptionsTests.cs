@@ -51,7 +51,7 @@ public sealed class BatchExportActivityProcessorOptionsTests : IDisposable
     {
         var values = new Dictionary<string, string?>()
         {
-            [BatchExportActivityProcessorOptions.MaxQueueSizeEnvVarKey] = "1",
+            [BatchExportActivityProcessorOptions.MaxQueueSizeEnvVarKey] = "3",
             [BatchExportActivityProcessorOptions.MaxExportBatchSizeEnvVarKey] = "2",
             [BatchExportActivityProcessorOptions.ExporterTimeoutEnvVarKey] = "3",
             [BatchExportActivityProcessorOptions.ScheduledDelayEnvVarKey] = "4",
@@ -63,7 +63,7 @@ public sealed class BatchExportActivityProcessorOptionsTests : IDisposable
 
         var options = new BatchExportActivityProcessorOptions(configuration);
 
-        Assert.Equal(1, options.MaxQueueSize);
+        Assert.Equal(3, options.MaxQueueSize);
         Assert.Equal(2, options.MaxExportBatchSize);
         Assert.Equal(3, options.ExporterTimeoutMilliseconds);
         Assert.Equal(4, options.ScheduledDelayMilliseconds);
@@ -83,6 +83,16 @@ public sealed class BatchExportActivityProcessorOptionsTests : IDisposable
         Assert.Equal(512, options.MaxExportBatchSize);
         Assert.Equal(2048, options.MaxQueueSize);
         Assert.Equal(5000, options.ScheduledDelayMilliseconds);
+    }
+
+    [Fact]
+    public void BatchExportProcessorOptions_InvalidNumericEnvironmentVariableOverrideFallsBackToDefaults()
+    {
+        Environment.SetEnvironmentVariable(BatchExportActivityProcessorOptions.MaxQueueSizeEnvVarKey, "0");
+
+        var options = new BatchExportActivityProcessorOptions();
+
+        Assert.Equal(2048, options.MaxQueueSize);
     }
 
     [Fact]
