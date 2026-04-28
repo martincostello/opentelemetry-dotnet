@@ -4,6 +4,7 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.CompilerServices;
+using System.Text;
 using OpenTelemetry.Internal;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
@@ -60,6 +61,39 @@ internal static partial class PrometheusSerializer
         }
 
         return cursor;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static int WriteCanonicalLabelValue(byte[] buffer, int cursor, double value)
+    {
+        // Histogram "le" and summary "quantile" label values use OpenMetrics canonical numbers.
+        // See https://prometheus.io/docs/specs/om/open_metrics_spec/#considerations-canonical-numbers
+        if (double.IsPositiveInfinity(value))
+        {
+            return WriteAsciiStringNoEscape(buffer, cursor, "+Inf");
+        }
+        else if (double.IsNegativeInfinity(value))
+        {
+            return WriteAsciiStringNoEscape(buffer, cursor, "-Inf");
+        }
+        else if (double.IsNaN(value))
+        {
+            return WriteAsciiStringNoEscape(buffer, cursor, "NaN");
+        }
+
+        var formattedValue = value.ToString("G17", CultureInfo.InvariantCulture);
+
+        var exponentIndex = formattedValue.IndexOf('E', StringComparison.Ordinal);
+        if (exponentIndex >= 0)
+        {
+            formattedValue = string.Concat(formattedValue.AsSpan(0, exponentIndex), "e", formattedValue.AsSpan(exponentIndex + 1));
+        }
+        else if (formattedValue.IndexOf('.', StringComparison.Ordinal) < 0)
+        {
+            formattedValue += ".0";
+        }
+
+        return WriteAsciiStringNoEscape(buffer, cursor, formattedValue);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -152,32 +186,8 @@ internal static partial class PrometheusSerializer
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int WriteLabelKey(byte[] buffer, int cursor, string value)
     {
-        if (string.IsNullOrEmpty(value))
-        {
-            buffer[cursor++] = unchecked((byte)'_');
-            return cursor;
-        }
-
-        var ordinal = (ushort)value[0];
-
-        if (ordinal is >= '0' and <= '9')
-        {
-            buffer[cursor++] = unchecked((byte)'_');
-        }
-
-        for (var i = 0; i < value.Length; i++)
-        {
-            ordinal = value[i];
-
-            buffer[cursor++] =
-                ordinal is (>= 'A' and <= 'Z') or
-                (>= 'a' and <= 'z') or
-                (>= '0' and <= '9')
-                ? (byte)ordinal
-                : (byte)'_';
-        }
-
-        return cursor;
+        var sanitizedValue = SanitizeLabelKey(value);
+        return WriteAsciiStringNoEscape(buffer, cursor, sanitizedValue);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -221,52 +231,6 @@ internal static partial class PrometheusSerializer
         buffer[cursor++] = unchecked((byte)'"');
 
         return cursor;
-
-        static string GetLabelValueString(object? labelValue)
-        {
-            // TODO: Attribute values should be written as their JSON representation. Extra logic may need to be added here to correctly convert other .NET types.
-            // More detail: https://github.com/open-telemetry/opentelemetry-dotnet/issues/4822#issuecomment-1707328495
-            if (labelValue is bool booleanValue)
-            {
-                return booleanValue ? "true" : "false";
-            }
-            else if (labelValue is double doubleValue)
-            {
-                return DoubleToString(doubleValue);
-            }
-            else if (labelValue is float floatValue)
-            {
-                return DoubleToString(floatValue);
-            }
-
-            return labelValue?.ToString() ?? string.Empty;
-
-            static string DoubleToString(double value)
-            {
-                // From https://prometheus.io/docs/specs/om/open_metrics_spec/#considerations-canonical-numbers:
-                // A warning to implementers in C and other languages that share its printf implementation:
-                // The standard precision of %f, %e and %g is only six significant digits. 17 significant
-                // digits are required for full precision, e.g. printf("%.17g", d).
-                if (MathHelper.IsFinite(value))
-                {
-                    return value.ToString("G17", CultureInfo.InvariantCulture);
-                }
-                else if (double.IsPositiveInfinity(value))
-                {
-                    return "+Inf";
-                }
-                else if (double.IsNegativeInfinity(value))
-                {
-                    return "-Inf";
-                }
-                else
-                {
-                    // See https://prometheus.io/docs/instrumenting/exposition_formats/#comments-help-text-and-type-information
-                    Debug.Assert(double.IsNaN(value), $"{nameof(value)} should be NaN.");
-                    return "NaN";
-                }
-            }
-        }
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -337,7 +301,7 @@ internal static partial class PrometheusSerializer
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int WriteTypeMetadata(byte[] buffer, int cursor, PrometheusMetric metric, bool openMetricsRequested)
     {
-        var metricType = MapPrometheusType(metric.Type);
+        var metricType = MapPrometheusType(metric.Type, openMetricsRequested);
 
         Debug.Assert(!string.IsNullOrEmpty(metricType), $"{nameof(metricType)} should not be null or empty.");
 
@@ -379,23 +343,37 @@ internal static partial class PrometheusSerializer
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static int WriteScopeInfo(byte[] buffer, int cursor, string scopeName)
+    public static int WriteScopeInfo(byte[] buffer, int cursor, Metric metric)
     {
-        if (string.IsNullOrEmpty(scopeName))
+        cursor = WriteScopeInfoMetadata(buffer, cursor);
+        return WriteScopeInfoMetric(buffer, cursor, metric);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static int WriteScopeInfoMetadata(byte[] buffer, int cursor)
+    {
+        cursor = WriteAsciiStringNoEscape(buffer, cursor, "# TYPE otel_scope info");
+        buffer[cursor++] = ASCII_LINEFEED;
+
+        cursor = WriteAsciiStringNoEscape(buffer, cursor, "# HELP otel_scope Scope metadata");
+        buffer[cursor++] = ASCII_LINEFEED;
+
+        return cursor;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static int WriteScopeInfoMetric(byte[] buffer, int cursor, Metric metric)
+    {
+        if (string.IsNullOrEmpty(metric.MeterName))
         {
             return cursor;
         }
 
-        cursor = WriteAsciiStringNoEscape(buffer, cursor, "# TYPE otel_scope_info info");
-        buffer[cursor++] = ASCII_LINEFEED;
-
-        cursor = WriteAsciiStringNoEscape(buffer, cursor, "# HELP otel_scope_info Scope metadata");
-        buffer[cursor++] = ASCII_LINEFEED;
-
+        // OpenMetrics info families use the family name in TYPE/HELP metadata and add the
+        // "_info" suffix only to the sample metric name.
+        // See https://prometheus.io/docs/specs/om/open_metrics_spec/#info-1
         cursor = WriteAsciiStringNoEscape(buffer, cursor, "otel_scope_info");
-        buffer[cursor++] = unchecked((byte)'{');
-        cursor = WriteLabel(buffer, cursor, "otel_scope_name", scopeName);
-        buffer[cursor++] = unchecked((byte)'}');
+        cursor = WriteScopeLabels(buffer, cursor, metric);
         buffer[cursor++] = unchecked((byte)' ');
         buffer[cursor++] = unchecked((byte)'1');
         buffer[cursor++] = ASCII_LINEFEED;
@@ -406,73 +384,96 @@ internal static partial class PrometheusSerializer
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int WriteTags(byte[] buffer, int cursor, Metric metric, ReadOnlyTagCollection tags, bool writeEnclosingBraces = true)
     {
-        if (writeEnclosingBraces)
-        {
-            buffer[cursor++] = unchecked((byte)'{');
-        }
-
-        cursor = WriteLabel(buffer, cursor, "otel_scope_name", metric.MeterName);
-        buffer[cursor++] = unchecked((byte)',');
-
-        if (!string.IsNullOrEmpty(metric.MeterVersion))
-        {
-            cursor = WriteLabel(buffer, cursor, "otel_scope_version", metric.MeterVersion);
-            buffer[cursor++] = unchecked((byte)',');
-        }
-
-        if (metric.MeterTags != null)
-        {
-            foreach (var tag in metric.MeterTags)
-            {
-                cursor = WriteLabel(buffer, cursor, tag.Key, tag.Value);
-                buffer[cursor++] = unchecked((byte)',');
-            }
-        }
-
-        foreach (var tag in tags)
-        {
-            cursor = WriteLabel(buffer, cursor, tag.Key, tag.Value);
-            buffer[cursor++] = unchecked((byte)',');
-        }
-
-        if (writeEnclosingBraces)
-        {
-            buffer[cursor - 1] = unchecked((byte)'}'); // Note: We write the '}' over the last written comma, which is extra.
-        }
-
-        return cursor;
+        List<LabelData>? labels = null;
+        AddScopeLabels(metric, ref labels);
+        AddMetricPointLabels(tags, ref labels);
+        return WriteLabels(buffer, cursor, labels, writeEnclosingBraces);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static int WriteTargetInfo(byte[] buffer, int cursor, Resource resource)
+    public static int WriteTargetInfo(byte[] buffer, int cursor, Resource resource, bool openMetricsRequested)
     {
         if (resource == Resource.Empty)
         {
             return cursor;
         }
 
-        cursor = WriteAsciiStringNoEscape(buffer, cursor, "# TYPE target info");
+        cursor = WriteAsciiStringNoEscape(buffer, cursor, "# TYPE ");
+        cursor = WriteAsciiStringNoEscape(buffer, cursor, openMetricsRequested ? "target" : "target_info");
+        buffer[cursor++] = unchecked((byte)' ');
+        cursor = WriteAsciiStringNoEscape(buffer, cursor, openMetricsRequested ? "info" : "gauge");
         buffer[cursor++] = ASCII_LINEFEED;
 
-        cursor = WriteAsciiStringNoEscape(buffer, cursor, "# HELP target Target metadata");
+        cursor = WriteAsciiStringNoEscape(buffer, cursor, "# HELP ");
+        cursor = WriteAsciiStringNoEscape(buffer, cursor, openMetricsRequested ? "target" : "target_info");
+        cursor = WriteAsciiStringNoEscape(buffer, cursor, " Target metadata");
         buffer[cursor++] = ASCII_LINEFEED;
 
         cursor = WriteAsciiStringNoEscape(buffer, cursor, "target_info");
-        buffer[cursor++] = unchecked((byte)'{');
-
-        foreach (var attribute in resource.Attributes)
-        {
-            cursor = WriteLabel(buffer, cursor, attribute.Key, attribute.Value);
-
-            buffer[cursor++] = unchecked((byte)',');
-        }
-
-        cursor--; // Write over the last written comma
-
-        buffer[cursor++] = unchecked((byte)'}');
+        cursor = WriteLabels(buffer, cursor, CreateResourceLabels(resource.Attributes.Select(static a => new KeyValuePair<string, object?>(a.Key, a.Value))), writeEnclosingBraces: true);
         buffer[cursor++] = unchecked((byte)' ');
         buffer[cursor++] = unchecked((byte)'1');
         buffer[cursor++] = ASCII_LINEFEED;
+
+        return cursor;
+    }
+
+    public static int WriteCreatedMetric(
+        byte[] buffer,
+        int cursor,
+        Metric metric,
+        PrometheusMetric prometheusMetric,
+        in MetricPoint metricPoint,
+        bool openMetricsRequested)
+    {
+        if (metricPoint.StartTime == default)
+        {
+            return cursor;
+        }
+
+        if (openMetricsRequested)
+        {
+            cursor = WriteMetricMetadataName(buffer, cursor, prometheusMetric, openMetricsRequested: true);
+        }
+        else
+        {
+            cursor = WriteMetricName(buffer, cursor, prometheusMetric, openMetricsRequested: false);
+        }
+
+        cursor = WriteAsciiStringNoEscape(buffer, cursor, "_created");
+        cursor = WriteTags(buffer, cursor, metric, metricPoint.Tags);
+        buffer[cursor++] = unchecked((byte)' ');
+        cursor = WriteUnixTimeSeconds(buffer, cursor, metricPoint.StartTime);
+        buffer[cursor++] = ASCII_LINEFEED;
+
+        return cursor;
+    }
+
+    public static int WriteExemplar(
+        byte[] buffer,
+        int cursor,
+        in Exemplar exemplar,
+        bool isLongValue,
+        ReadOnlyTagCollection? baseTags = null)
+    {
+        buffer[cursor++] = unchecked((byte)' ');
+        buffer[cursor++] = unchecked((byte)'#');
+        buffer[cursor++] = unchecked((byte)' ');
+
+        List<LabelData>? labels = null;
+        AddExemplarLabels(in exemplar, ref labels);
+        cursor = WriteLabels(buffer, cursor, labels, writeEnclosingBraces: true);
+        buffer[cursor++] = unchecked((byte)' ');
+
+        cursor = isLongValue
+            ? WriteLong(buffer, cursor, exemplar.LongValue)
+            : WriteDouble(buffer, cursor, exemplar.DoubleValue);
+
+        if (exemplar.Timestamp != default)
+        {
+            buffer[cursor++] = unchecked((byte)' ');
+            cursor = WriteUnixTimeSeconds(buffer, cursor, exemplar.Timestamp);
+        }
 
         return cursor;
     }
@@ -498,12 +499,277 @@ internal static partial class PrometheusSerializer
         return WriteUnicodeNoEscape(buffer, cursor, 0xFFFD);
     }
 
-    private static string MapPrometheusType(PrometheusType type) => type switch
+    private static string GetLabelValueString(object? labelValue)
+    {
+        // TODO: Attribute values should be written as their JSON representation. Extra logic may need to be added here to correctly convert other .NET types.
+        // More detail: https://github.com/open-telemetry/opentelemetry-dotnet/issues/4822#issuecomment-1707328495
+        if (labelValue is bool booleanValue)
+        {
+            return booleanValue ? "true" : "false";
+        }
+        else if (labelValue is double doubleValue)
+        {
+            return DoubleToString(doubleValue);
+        }
+        else if (labelValue is float floatValue)
+        {
+            return DoubleToString(floatValue);
+        }
+
+        return labelValue?.ToString() ?? string.Empty;
+
+        static string DoubleToString(double value)
+        {
+            // From https://prometheus.io/docs/specs/om/open_metrics_spec/#considerations-canonical-numbers:
+            // A warning to implementers in C and other languages that share its printf implementation:
+            // The standard precision of %f, %e and %g is only six significant digits. 17 significant
+            // digits are required for full precision, e.g. printf("%.17g", d).
+            if (MathHelper.IsFinite(value))
+            {
+                return value.ToString("G17", CultureInfo.InvariantCulture);
+            }
+            else if (double.IsPositiveInfinity(value))
+            {
+                return "+Inf";
+            }
+            else if (double.IsNegativeInfinity(value))
+            {
+                return "-Inf";
+            }
+            else
+            {
+                // See https://prometheus.io/docs/instrumenting/exposition_formats/#comments-help-text-and-type-information
+                Debug.Assert(double.IsNaN(value), $"{nameof(value)} should be NaN.");
+                return "NaN";
+            }
+        }
+    }
+
+    private static string SanitizeLabelKey(string value)
+    {
+        if (string.IsNullOrEmpty(value))
+        {
+            return "_";
+        }
+
+        StringBuilder? sb = null;
+        var lastCharUnderscore = false;
+
+        if (value[0] is >= '0' and <= '9')
+        {
+            sb = new StringBuilder(value.Length + 1);
+            sb.Append('_');
+            lastCharUnderscore = true;
+        }
+
+        for (var i = 0; i < value.Length; i++)
+        {
+            var c = value[i];
+            if (c is (>= 'A' and <= 'Z') or (>= 'a' and <= 'z') or (>= '0' and <= '9'))
+            {
+                sb?.Append(c);
+                lastCharUnderscore = false;
+            }
+            else
+            {
+                if (!lastCharUnderscore)
+                {
+                    sb ??= new StringBuilder(value, 0, i, value.Length + 1);
+                    sb.Append('_');
+                    lastCharUnderscore = true;
+                }
+            }
+        }
+
+        return sb?.ToString() ?? value;
+    }
+
+    private static int WriteScopeLabels(byte[] buffer, int cursor, Metric metric)
+    {
+        List<LabelData>? labels = null;
+        AddScopeLabels(metric, ref labels);
+        return WriteLabels(buffer, cursor, labels, writeEnclosingBraces: true);
+    }
+
+    private static List<LabelData> CreateResourceLabels(IEnumerable<KeyValuePair<string, object?>> resourceAttributes)
+    {
+        List<LabelData>? labels = null;
+
+        foreach (var attribute in resourceAttributes)
+        {
+            AddLabel(attribute.Key, attribute.Key, attribute.Value, ref labels);
+        }
+
+        return labels ?? [];
+    }
+
+    private static void AddScopeLabels(Metric metric, ref List<LabelData>? labels)
+    {
+        AddLabel("otel_scope_name", "otel_scope_name", metric.MeterName, ref labels);
+
+        if (!string.IsNullOrEmpty(metric.MeterVersion))
+        {
+            AddLabel("otel_scope_version", "otel_scope_version", metric.MeterVersion, ref labels);
+        }
+
+        if (!string.IsNullOrEmpty(metric.MeterSchemaUrl))
+        {
+            // Prometheus exporters MUST add scope schema URL as otel_scope_schema_url.
+            // See https://opentelemetry.io/docs/specs/otel/compatibility/prometheus_and_openmetrics/#instrumentation-scope-1
+            AddLabel("otel_scope_schema_url", "otel_scope_schema_url", metric.MeterSchemaUrl, ref labels);
+        }
+
+        if (metric.MeterTags != null)
+        {
+            foreach (var tag in metric.MeterTags)
+            {
+                // Scope attributes named name/version/schema_url MUST be dropped to avoid
+                // conflicts with otel_scope_name/version/schema_url.
+                // See https://opentelemetry.io/docs/specs/otel/compatibility/prometheus_and_openmetrics/#instrumentation-scope-1
+                if (tag.Key == "name" || tag.Key == "version" || tag.Key == "schema_url")
+                {
+                    continue;
+                }
+
+                AddLabel($"otel_scope_{tag.Key}", $"otel_scope_{tag.Key}", tag.Value, ref labels);
+            }
+        }
+    }
+
+    private static void AddMetricPointLabels(ReadOnlyTagCollection tags, ref List<LabelData>? labels)
+    {
+        foreach (var tag in tags)
+        {
+            AddLabel(tag.Key, tag.Key, tag.Value, ref labels);
+        }
+    }
+
+    private static void AddExemplarLabels(in Exemplar exemplar, ref List<LabelData>? labels)
+    {
+        if (exemplar.TraceId != default)
+        {
+            AddLabel("trace_id", "trace_id", exemplar.TraceId.ToHexString(), ref labels);
+        }
+
+        if (exemplar.SpanId != default)
+        {
+            AddLabel("span_id", "span_id", exemplar.SpanId.ToHexString(), ref labels);
+        }
+
+        foreach (var tag in exemplar.FilteredTags)
+        {
+            if (tag.Key == "trace_id" || tag.Key == "span_id")
+            {
+                continue;
+            }
+
+            AddLabel(tag.Key, tag.Key, tag.Value, ref labels);
+        }
+    }
+
+    private static void AddLabel(string originalKey, string outputKey, object? value, ref List<LabelData>? labels)
+    {
+        labels ??= [];
+        labels.Add(new LabelData(originalKey, SanitizeLabelKey(outputKey), GetLabelValueString(value)));
+    }
+
+    private static int WriteLabels(byte[] buffer, int cursor, IReadOnlyList<LabelData>? labels, bool writeEnclosingBraces)
+    {
+        if (writeEnclosingBraces)
+        {
+            buffer[cursor++] = unchecked((byte)'{');
+        }
+
+        if (labels != null && labels.Count > 0)
+        {
+            List<string>? orderedKeys = null;
+            Dictionary<string, List<LabelData>>? labelsBySanitizedKey = null;
+
+            foreach (var label in labels)
+            {
+                orderedKeys ??= [];
+                labelsBySanitizedKey ??= [];
+
+                if (!labelsBySanitizedKey.TryGetValue(label.OutputKey, out var bucket))
+                {
+                    bucket = [];
+                    labelsBySanitizedKey[label.OutputKey] = bucket;
+                    orderedKeys.Add(label.OutputKey);
+                }
+
+                bucket.Add(label);
+            }
+
+            Debug.Assert(orderedKeys != null, $"{nameof(orderedKeys)} should not be null.");
+            Debug.Assert(labelsBySanitizedKey != null, $"{nameof(labelsBySanitizedKey)} should not be null.");
+
+            foreach (var key in orderedKeys)
+            {
+                var bucket = labelsBySanitizedKey[key];
+                var labelValue = GetMergedLabelValue(bucket);
+
+                cursor = WriteLabel(buffer, cursor, key, labelValue);
+                buffer[cursor++] = unchecked((byte)',');
+            }
+
+            cursor--;
+        }
+
+        if (writeEnclosingBraces)
+        {
+            buffer[cursor++] = unchecked((byte)'}');
+        }
+
+        return cursor;
+    }
+
+    private static string GetMergedLabelValue(List<LabelData> labels)
+    {
+        if (labels.Count == 1)
+        {
+            return labels[0].Value;
+        }
+
+        labels.Sort(static (left, right) => string.CompareOrdinal(left.OriginalKey, right.OriginalKey));
+
+        var sb = new StringBuilder();
+        for (var i = 0; i < labels.Count; i++)
+        {
+            if (i > 0)
+            {
+                sb.Append(';');
+            }
+
+            sb.Append(labels[i].Value);
+        }
+
+        return sb.ToString();
+    }
+
+    private static int WriteUnixTimeSeconds(byte[] buffer, int cursor, DateTimeOffset value)
+    {
+        cursor = WriteDouble(buffer, cursor, value.ToUnixTimeMilliseconds() / 1000.0);
+        return cursor;
+    }
+
+    private static string MapPrometheusType(PrometheusType type, bool openMetricsRequested) => type switch
     {
         PrometheusType.Gauge => "gauge",
         PrometheusType.Counter => "counter",
         PrometheusType.Summary => "summary",
         PrometheusType.Histogram => "histogram",
-        PrometheusType.Untyped or _ => "untyped",
+
+        // OpenMetrics 1.0 uses "unknown" while Prometheus text format 0.0.4 uses "untyped".
+        // See https://prometheus.io/docs/specs/om/open_metrics_spec/#unknown-1
+        PrometheusType.Untyped or _ => openMetricsRequested ? "unknown" : "untyped",
     };
+
+    private readonly struct LabelData(string originalKey, string outputKey, string value)
+    {
+        public string OriginalKey { get; } = originalKey;
+
+        public string OutputKey { get; } = outputKey;
+
+        public string Value { get; } = value;
+    }
 }

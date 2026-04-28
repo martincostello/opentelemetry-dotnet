@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using System.Diagnostics.Metrics;
+using System.Text;
+using System.Text.RegularExpressions;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Tests;
 using Xunit;
@@ -200,6 +202,85 @@ public sealed class PrometheusCollectionManagerTests
                 Assert.Equal(firstResponse.ViewPayload, response.ViewPayload);
                 Assert.Equal(firstResponse.CollectionResponse.GeneratedAtUtc, response.CollectionResponse.GeneratedAtUtc);
             }
+        }
+    }
+
+    [Fact]
+    public async Task OpenMetricsScopeInfoIsWrittenAsASingleMetricFamily()
+    {
+        using var meter1 = new Meter($"{Utils.GetCurrentMethodName()}_1");
+        using var meter2 = new Meter($"{Utils.GetCurrentMethodName()}_2");
+
+        using var provider = Sdk.CreateMeterProviderBuilder()
+            .AddMeter(meter1.Name)
+            .AddMeter(meter2.Name)
+#if PROMETHEUS_HTTP_LISTENER
+            .AddPrometheusHttpListener()
+#elif PROMETHEUS_ASPNETCORE
+            .AddPrometheusExporter()
+#endif
+            .Build();
+
+#pragma warning disable CA2000 // MeterProvider owns exporter lifecycle
+        Assert.True(provider.TryFindExporter(out PrometheusExporter? exporter));
+#pragma warning restore CA2000 // MeterProvider owns exporter lifecycle
+
+        var counter1 = meter1.CreateCounter<int>("counter_1");
+        var counter2 = meter2.CreateCounter<int>("counter_2");
+
+        counter1.Add(1);
+        counter2.Add(1);
+
+        var response = await exporter!.CollectionManager.EnterCollect(openMetricsRequested: true);
+        try
+        {
+            var output = Encoding.UTF8.GetString(response.OpenMetricsView);
+
+            Assert.Equal(1, Regex.Count(output, "^# TYPE otel_scope info$", RegexOptions.Multiline));
+            Assert.Equal(1, Regex.Count(output, "^# HELP otel_scope Scope metadata$", RegexOptions.Multiline));
+            Assert.Contains($"otel_scope_info{{otel_scope_name=\"{meter1.Name}\"}} 1", output, StringComparison.Ordinal);
+            Assert.Contains($"otel_scope_info{{otel_scope_name=\"{meter2.Name}\"}} 1", output, StringComparison.Ordinal);
+        }
+        finally
+        {
+            exporter.CollectionManager.ExitCollect();
+        }
+    }
+
+    [Fact]
+    public async Task ConflictingMetricTypesAreDroppedFromAScrape()
+    {
+        using var meter = new Meter(Utils.GetCurrentMethodName());
+
+        using var provider = Sdk.CreateMeterProviderBuilder()
+            .AddMeter(meter.Name)
+#if PROMETHEUS_HTTP_LISTENER
+            .AddPrometheusHttpListener()
+#elif PROMETHEUS_ASPNETCORE
+            .AddPrometheusExporter()
+#endif
+            .Build();
+
+#pragma warning disable CA2000
+        Assert.True(provider.TryFindExporter(out PrometheusExporter? exporter));
+#pragma warning restore CA2000
+
+        var counter = meter.CreateCounter<int>("test.metric");
+        meter.CreateObservableGauge("test-metric", () => 1);
+        counter.Add(1);
+
+        var response = await exporter!.CollectionManager.EnterCollect(openMetricsRequested: true);
+        try
+        {
+            var output = Encoding.UTF8.GetString(response.OpenMetricsView);
+
+            Assert.DoesNotContain("# TYPE test_metric", output, StringComparison.Ordinal);
+            Assert.DoesNotContain("test_metric_total", output, StringComparison.Ordinal);
+            Assert.Contains("# EOF", output, StringComparison.Ordinal);
+        }
+        finally
+        {
+            exporter.CollectionManager.ExitCollect();
         }
     }
 
