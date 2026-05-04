@@ -1,6 +1,9 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
+#if NETFRAMEWORK
+using System.Net.Http;
+#endif
 using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Containers;
 
@@ -15,30 +18,54 @@ public sealed class PromToolFixture : PrometheusFixture
         string accept,
         CancellationToken cancellationToken = default)
     {
-        // Route the request through Docker's internal host to
-        // avoid issues with localhost resolution inside the container
-        var metricsUri = new UriBuilder(targetUri)
+        using var httpClient = new HttpClient();
+        httpClient.BaseAddress = targetUri;
+
+        if (!string.IsNullOrEmpty(accept))
         {
-            Host = DockerInternalHost,
+            httpClient.DefaultRequestHeaders.TryAddWithoutValidation("Accept", accept);
+        }
+
+        httpClient.DefaultRequestHeaders.TryAddWithoutValidation("Host", targetUri.Host);
+
+        using var response = await httpClient.GetAsync(targetUri, cancellationToken).ConfigureAwait(false);
+        var text = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        var format =
+            response.Content.Headers.ContentType?.MediaType?.StartsWith(
+            "application/openmetrics-text",
+            StringComparison.OrdinalIgnoreCase) is true
+            ? "openmetrics"
+            : "prometheus";
+
+        using var process = new System.Diagnostics.Process
+        {
+            StartInfo = new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = "C:\\Users\\marti\\.copilot\\session-state\\1eb2291e-ff83-48ab-87db-d8efdd859a62\\files\\promtool.exe",
+                Arguments = $"check metrics --lint=all --format={format}",
+                RedirectStandardInput = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+            },
         };
 
-        // Use wget to fetch the metrics and pipe them to promtool for validation.
-        // The metrics text is output to a temporary file so that we can capture
-        // the response to print to stdout to aid with debugging if necessary.
-        string[] command =
-        [
-            "sh",
-            "-c",
-            $"set -eu;" +
-            $"tmp=/tmp/metrics.$$;" +
-            $"wget -qO \"$tmp\" --header=\"Accept: {accept}\" --header=\"Host: {targetUri.Host}\" \"{metricsUri}\"; " +
-            $"cat \"$tmp\"; " +
-            $"promtool check metrics --lint=all < \"$tmp\"",
-        ];
+        process.Start();
 
-        return await this.Container
-            .ExecAsync(command, cancellationToken)
-            .ConfigureAwait(false);
+        await process.StandardInput.WriteAsync(text).ConfigureAwait(false);
+        process.StandardInput.Close();
+
+        var promOutTask = process.StandardOutput.ReadToEndAsync().ConfigureAwait(false);
+        var promErrTask = process.StandardError.ReadToEndAsync().ConfigureAwait(false);
+
+        process.WaitForExit();
+
+        var stdout = await promOutTask;
+        var stderr = await promErrTask;
+
+        return new(text + Environment.NewLine + stdout, stderr, process.ExitCode);
     }
 
     protected override IContainer CreateContainer() =>

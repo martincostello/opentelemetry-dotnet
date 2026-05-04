@@ -19,10 +19,10 @@ public class PrometheusIntegrationTests(PromToolFixture fixture, ITestOutputHelp
     [InlineData("text/plain")]
     [InlineData("text/plain;version=0.0.4")]
     [InlineData("text/plain;version=1.0.0")]
-    [InlineData("application/openmetrics-text", Skip = "https://github.com/prometheus/prometheus/issues/8932")]
+    [InlineData("application/openmetrics-text")]
     [InlineData("application/openmetrics-text;version=0.0.4")]
-    [InlineData("application/openmetrics-text;version=1.0.0", Skip = "https://github.com/prometheus/prometheus/issues/8932")]
-    [InlineData("application/openmetrics-text;version=1.0.0;escaping=allow-utf-8;q=0.5,application/openmetrics-text;version=0.0.1;q=0.4,text/plain;version=1.0.0;escaping=allow-utf-8;q=0.3,text/plain;version=0.0.4;q=0.2,/;q=0.1", Skip = "https://github.com/prometheus/prometheus/issues/8932")]
+    [InlineData("application/openmetrics-text;version=1.0.0")]
+    [InlineData("application/openmetrics-text;version=1.0.0;escaping=allow-utf-8;q=0.5,application/openmetrics-text;version=0.0.1;q=0.4,text/plain;version=1.0.0;escaping=allow-utf-8;q=0.3,text/plain;version=0.0.4;q=0.2,/;q=0.1")]
 
     public async Task Can_Scrape_Prometheus(string accept)
     {
