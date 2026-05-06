@@ -1,6 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
+using System.Diagnostics.CodeAnalysis;
 using System.Text;
 
 #if NET8_0_OR_GREATER
@@ -13,7 +14,7 @@ using SupportedVersions = System.Collections.Generic.HashSet<System.Version>;
 
 namespace OpenTelemetry.Exporter.Prometheus;
 
-internal readonly struct PrometheusProtocol
+internal readonly struct PrometheusProtocol : IEquatable<PrometheusProtocol>
 {
     public const string AllowUtf8Escaping = "allow-utf-8";
     public const string UnderscoresEscaping = "underscores";
@@ -79,4 +80,10 @@ internal readonly struct PrometheusProtocol
 
         return builder.ToString();
     }
+
+    public bool Equals(PrometheusProtocol other) => throw new NotImplementedException();
+
+    public override bool Equals([NotNullWhen(true)] object? obj) => throw new NotImplementedException();
+
+    public override int GetHashCode() => throw new NotImplementedException();
 }
