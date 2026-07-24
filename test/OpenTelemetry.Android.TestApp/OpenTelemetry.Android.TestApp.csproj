@@ -22,7 +22,7 @@
 
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
-    <NoWarn>$(NoWarn);CA1515;CA1707;CA2007</NoWarn>
+    <NoWarn>$(NoWarn);CA1515;CA1707;CA1848;CA2007</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

@@ -22,7 +22,7 @@ public class TestInstrumentation : Instrumentation
     public override void OnCreate(Bundle? arguments)
     {
         base.OnCreate(arguments);
-        Start();
+        this.Start();
     }
 
     public override async void OnStart()
@@ -30,7 +30,7 @@ public class TestInstrumentation : Instrumentation
         base.OnStart();
 
         var consumer = new ResultConsumer(this);
-        var bundle = new Bundle();
+        using var bundle = new Bundle();
         try
         {
             var writablePath = Application.Context.GetExternalFilesDir(null)?.AbsolutePath ?? Path.GetTempPath();
@@ -39,7 +39,7 @@ public class TestInstrumentation : Instrumentation
                 "--results-directory", resultsPath,
                 "--report-trx"
             ]);
-            builder.AddMSTest(() => [GetType().Assembly]);
+            builder.AddMSTest(() => [this.GetType().Assembly]);
             builder.AddTrxReportProvider();
             builder.TestHost.AddDataConsumer(_ => consumer);
 
@@ -50,12 +50,12 @@ public class TestInstrumentation : Instrumentation
             bundle.PutInt("failed", consumer.Failed);
             bundle.PutInt("skipped", consumer.Skipped);
             bundle.PutString("resultsPath", consumer.TrxReportPath);
-            Finish(Result.Ok, bundle);
+            this.Finish(Result.Ok, bundle);
         }
         catch (Exception ex)
         {
             bundle.PutString("error", ex.ToString());
-            Finish(Result.Canceled, bundle);
+            this.Finish(Result.Canceled, bundle);
         }
     }
 
@@ -115,7 +115,7 @@ public class TestInstrumentation : Instrumentation
                 };
 
                 var id = node.Properties.SingleOrDefault<TestMethodIdentifierProperty>();
-                var b = new Bundle();
+                using var b = new Bundle();
                 b.PutString("test", id is not null ? $"{id.Namespace}.{id.TypeName}.{id.MethodName}" : node.DisplayName);
                 b.PutString("outcome", outcome);
                 instrumentation.SendStatus(0, b);
