@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Copyright The OpenTelemetry Authors -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <application android:label="OpenTelemetry.Android.TestApp" />
+  <!-- Required so a follow-up can export over OTLP/HTTP to the host via 10.0.2.2. -->
+  <uses-permission android:name="android.permission.INTERNET" />
+</manifest>
