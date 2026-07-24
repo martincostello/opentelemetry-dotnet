@@ -80,7 +80,10 @@ public sealed class AndroidEndToEndTests
 
         var logger = loggerFactory.CreateLogger(InstrumentationSource.LoggerName);
 
-        logger.LogInformation("{Message}", InstrumentationSource.LogBody);
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation("{Message}", InstrumentationSource.LogBody);
+        }
     }
 
     private static ResourceBuilder CreateResourceBuilder()
