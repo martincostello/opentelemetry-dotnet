@@ -26,7 +26,7 @@ This host project:
 - JDK 17.
 - A **running Android emulator** (API level 24+). The tests do not boot one; the
   CI workflow uses [`reactivecircus/android-emulator-runner`](https://github.com/ReactiveCircus/android-emulator-runner)
-  on a KVM-accelerated `ubuntu-latest` runner.
+  on a KVM-accelerated Ubuntu runner.
 
 ## Running
 
