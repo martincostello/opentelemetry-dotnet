@@ -62,24 +62,28 @@ public sealed class AndroidAppFixture : IAsyncLifetime
     private static (int ExitCode, string Output) RunAppOnDevice()
     {
         var repoRoot = RepoRoot();
-        var project = Path.Combine(repoRoot, "test", "OpenTelemetry.Android.TestApp", "OpenTelemetry.Android.TestApp.csproj");
+        var appDirectory = Path.Combine(repoRoot, "test", "OpenTelemetry.Android.TestApp");
 
         var startInfo = new ProcessStartInfo("dotnet")
         {
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
-            WorkingDirectory = repoRoot,
+
+            // Run from the app directory so the project's global.json - which opts
+            // 'dotnet test' into Microsoft.Testing.Platform (MTP) mode - is picked.
+            WorkingDirectory = appDirectory,
         };
 
         startInfo.Environment["DOTNET_CLI_USE_MSBUILD_SERVER"] = "0";
         startInfo.Environment["MSBUILDDISABLENODEREUSE"] = "1";
 
+        // MTP mode: VSTest-only options (--logger, --disable-build-servers) do not
+        // apply. 'dotnet test' builds the app, deploys it to the connected emulator
+        // and runs the on-device instrumentation.
         startInfo.ArgumentList.Add("test");
-        startInfo.ArgumentList.Add(project);
         startInfo.ArgumentList.Add("--configuration");
         startInfo.ArgumentList.Add(Configuration);
-        startInfo.ArgumentList.Add("--disable-build-servers");
 
         using var process = Process.Start(startInfo)
             ?? throw new InvalidOperationException("Failed to start 'dotnet test' for the Android app.");
