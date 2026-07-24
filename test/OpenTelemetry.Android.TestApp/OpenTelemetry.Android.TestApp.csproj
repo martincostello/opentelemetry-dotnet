@@ -30,6 +30,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Remove="$(RepoRoot)\test\Shared\StrongNameTests.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Using Include="Microsoft.VisualStudio.TestTools.UnitTesting" />
   </ItemGroup>
 
