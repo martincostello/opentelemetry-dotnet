@@ -33,8 +33,8 @@ public class TestInstrumentation : Instrumentation
         var bundle = new Bundle();
         try
         {
-            var writeablePath = Application.Context.GetExternalFilesDir(null)?.AbsolutePath ?? Path.GetTempPath();
-            var resultsPath = Path.Combine(writeablePath, "TestResults");
+            var writablePath = Application.Context.GetExternalFilesDir(null)?.AbsolutePath ?? Path.GetTempPath();
+            var resultsPath = Path.Combine(writablePath, "TestResults");
             var builder = await TestApplication.CreateBuilderAsync([
                 "--results-directory", resultsPath,
                 "--report-trx"
