@@ -13,7 +13,12 @@ namespace OpenTelemetry.Android.Tests;
 /// tests then assert on what was received.
 /// </summary>
 /// <remarks>
-/// An Android emulator must already be running. The 'android' workload is required to build the app.
+/// An Android emulator must already be running. The 'android' workload is required
+/// to build the app and 'adb' must be on the PATH (both are provided by the CI
+/// workflow). The app is built and installed with 'dotnet build -t:Install' and run
+/// with 'adb shell am instrument'; 'dotnet test' cannot drive on-device Android in
+/// the current workload (its Microsoft.Testing.Platform pipe is not reachable from
+/// the device).
 /// </remarks>
 public sealed class AndroidAppFixture : IAsyncLifetime
 {
@@ -23,7 +28,11 @@ public sealed class AndroidAppFixture : IAsyncLifetime
     private const string Configuration = "Release";
 #endif
 
-    private static readonly TimeSpan DeviceRunTimeout = TimeSpan.FromMinutes(20);
+    private const string InstrumentationComponent =
+        "io.opentelemetry.dotnet.android/io.opentelemetry.dotnet.android.TestInstrumentation";
+
+    private static readonly TimeSpan BuildAndInstallTimeout = TimeSpan.FromMinutes(20);
+    private static readonly TimeSpan InstrumentationTimeout = TimeSpan.FromMinutes(10);
 
     internal OtlpHttpCollector Collector { get; private set; } = null!;
 
@@ -35,7 +44,30 @@ public sealed class AndroidAppFixture : IAsyncLifetime
     {
         this.Collector = await OtlpHttpCollector.StartAsync();
 
-        (this.DeviceRunExitCode, this.DeviceRunOutput) = RunAppOnDevice();
+        var repoRoot = RepoRoot();
+        var project = Path.Combine(repoRoot, "test", "OpenTelemetry.Android.TestApp", "OpenTelemetry.Android.TestApp.csproj");
+
+        // Build the APK and install it on the connected emulator.
+        var install = RunProcess("dotnet", ["build", project, "--configuration", Configuration, "-t:Install"], repoRoot, BuildAndInstallTimeout);
+        if (install.ExitCode != 0)
+        {
+            this.DeviceRunExitCode = install.ExitCode;
+            this.DeviceRunOutput = "APK build/install failed." + Environment.NewLine + install.Output;
+            return;
+        }
+
+        // Run the on-device instrumentation synchronously. It executes the tests via
+        // Microsoft.Testing.Platform on the device, which export OTLP to the collector.
+        var run = RunProcess("adb", ["shell", "am", "instrument", "-w", InstrumentationComponent], repoRoot, InstrumentationTimeout);
+
+        // 'am instrument' exits 0 even when tests fail; success is signalled by the
+        // instrumentation result: Result.Ok (INSTRUMENTATION_CODE: -1) with failed=0.
+        var succeeded = run.ExitCode == 0
+            && run.Output.Contains("INSTRUMENTATION_CODE: -1", StringComparison.Ordinal)
+            && run.Output.Contains("failed=0", StringComparison.Ordinal);
+
+        this.DeviceRunExitCode = succeeded ? 0 : 1;
+        this.DeviceRunOutput = install.Output + Environment.NewLine + run.Output;
     }
 
     public async Task DisposeAsync()
@@ -59,34 +91,29 @@ public sealed class AndroidAppFixture : IAsyncLifetime
             ?? throw new InvalidOperationException("Could not locate the repository root (OpenTelemetry.slnx).");
     }
 
-    private static (int ExitCode, string Output) RunAppOnDevice()
+    private static (int ExitCode, string Output) RunProcess(string fileName, string[] arguments, string workingDirectory, TimeSpan timeout)
     {
-        var repoRoot = RepoRoot();
-        var appDirectory = Path.Combine(repoRoot, "test", "OpenTelemetry.Android.TestApp");
-
-        var startInfo = new ProcessStartInfo("dotnet")
+        var startInfo = new ProcessStartInfo(fileName)
         {
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
-
-            // Run from the app directory so the project's global.json - which opts
-            // 'dotnet test' into Microsoft.Testing.Platform (MTP) mode - is picked.
-            WorkingDirectory = appDirectory,
+            WorkingDirectory = workingDirectory,
         };
 
+        // Stop the persistent build servers from inheriting the redirected handles,
+        // otherwise WaitForExit can block on a build server that idle-times-out long
+        // after the command itself finished.
         startInfo.Environment["DOTNET_CLI_USE_MSBUILD_SERVER"] = "0";
         startInfo.Environment["MSBUILDDISABLENODEREUSE"] = "1";
 
-        // MTP mode: VSTest-only options (--logger, --disable-build-servers) do not
-        // apply. 'dotnet test' builds the app, deploys it to the connected emulator
-        // and runs the on-device instrumentation.
-        startInfo.ArgumentList.Add("test");
-        startInfo.ArgumentList.Add("--configuration");
-        startInfo.ArgumentList.Add(Configuration);
+        foreach (var argument in arguments)
+        {
+            startInfo.ArgumentList.Add(argument);
+        }
 
         using var process = Process.Start(startInfo)
-            ?? throw new InvalidOperationException("Failed to start 'dotnet test' for the Android app.");
+            ?? throw new InvalidOperationException($"Failed to start '{fileName}'.");
 
         var output = new StringBuilder();
 
@@ -115,11 +142,11 @@ public sealed class AndroidAppFixture : IAsyncLifetime
         process.BeginOutputReadLine();
         process.BeginErrorReadLine();
 
-        if (!process.WaitForExit(DeviceRunTimeout))
+        if (!process.WaitForExit(timeout))
         {
             process.Kill(entireProcessTree: true);
             throw new InvalidOperationException(
-                $"'dotnet test' for the Android app timed out after {DeviceRunTimeout}.{Environment.NewLine}{output}");
+                $"'{fileName}' timed out after {timeout}.{Environment.NewLine}{output}");
         }
 
         // Wait (again, with no timeout) for the async output handlers to flush.

@@ -13,9 +13,10 @@ This host project:
 
 1. Starts an in-process OTLP/HTTP receiver (`OtlpHttpCollector`) on the host,
    bound to port `4318`.
-2. Drives the app on a connected emulator via `dotnet test` (`AndroidAppFixture`).
-   The app exports to `http://10.0.2.2:4318` - the emulator's alias for the host
-   loopback - so the export is a real cross-process HTTP/protobuf call.
+2. Installs the app on a connected emulator (`dotnet build -t:Install`) and runs
+   it with `adb shell am instrument` (`AndroidAppFixture`). The app exports to
+   `http://10.0.2.2:4318` - the emulator's alias for the host loopback - so the
+   export is a real cross-process HTTP/protobuf call.
 3. Asserts the receiver decoded the expected traces, metrics and logs, and that
    the on-device test run itself succeeded.
 
