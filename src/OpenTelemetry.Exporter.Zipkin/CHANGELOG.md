@@ -6,6 +6,24 @@ Notes](../../RELEASENOTES.md).
 
 ## Unreleased
 
+* `Activity` events (including exception events) that have attributes are no
+  longer silently dropped when exported. Per the
+  [OpenTelemetry specification](https://github.com/open-telemetry/opentelemetry-specification/blob/main/specification/trace/sdk_exporters/zipkin.md#events),
+  attributes are now encoded as a JSON object and appended to the annotation
+  value, e.g. `"my-event-name: {"key1":"value1"}"`. Events without attributes
+  continue to use just the event name as the annotation value.
+  ([#TODO](https://github.com/open-telemetry/opentelemetry-dotnet/pull/TODO))
+
+* Fixed map-valued (`IEnumerable<KeyValuePair<string, object?>>`) tag values
+  being converted to their .NET type name instead of being JSON-encoded.
+  A map-valued tag is now correctly JSON-encoded and represented as a string,
+  consistent with how array-valued tags are already handled.
+  ([#TODO](https://github.com/open-telemetry/opentelemetry-dotnet/pull/TODO))
+
+* Fixed `byte[]`-valued tags being serialized as a JSON array of numbers
+  (e.g. `[1,2,3]`) instead of being Base64-encoded as-per the specification.
+  ([#TODO](https://github.com/open-telemetry/opentelemetry-dotnet/pull/TODO))
+
 ## 1.18.0
 
 Released 2026-Aug-21

@@ -54,6 +54,7 @@ internal static class ZipkinActivitySource
             { "http.host", "http://localhost:44312/" }, // simulating instrumentation tag adding http.host
             { "dateTimeKey", dateTime.Value },
             { "dateTimeArrayKey", new DateTime[] { dateTime.Value } },
+            { "mapKey", new Dictionary<string, object?> { ["nested1"] = "value1", ["nested2"] = 42 } },
         };
         if (additionalAttributes != null)
         {

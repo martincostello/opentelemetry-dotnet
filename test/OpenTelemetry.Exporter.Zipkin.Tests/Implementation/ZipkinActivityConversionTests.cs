@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using System.Diagnostics;
+using System.Text;
+using System.Text.Json;
 using OpenTelemetry.Exporter.Zipkin.Tests;
 using OpenTelemetry.Internal;
 using OpenTelemetry.Trace;
@@ -39,11 +41,86 @@ public class ZipkinActivityConversionTests
             Assert.Equal(tagsArray[counter++].Value, tags.Value);
         }
 
-        foreach (var annotation in zipkinSpan.Annotations)
+        var events = activity.Events.ToArray();
+        var annotations = zipkinSpan.Annotations.ToArray();
+
+        Assert.Equal(events.Length, annotations.Length);
+
+        for (var i = 0; i < events.Length; ++i)
         {
             // Timestamp is same in both events
-            Assert.Equal(activity.Events.First().Timestamp.ToEpochMicroseconds(), annotation.Timestamp);
+            Assert.Equal(events[i].Timestamp.ToEpochMicroseconds(), annotations[i].Timestamp);
+
+            // Each event in the fixture has a single "key": "value" tag, which per
+            // https://github.com/open-telemetry/opentelemetry-specification/blob/main/specification/trace/sdk_exporters/zipkin.md#events
+            // must be appended to the annotation value as a JSON object since Zipkin has no
+            // concept of event attributes.
+            Assert.Equal($@"{events[i].Name}: {{""key"":""value""}}", annotations[i].Value);
         }
+    }
+
+    [Fact]
+    public void ToZipkinSpan_Event_Without_Attributes_UsesEventNameOnly()
+    {
+        // Arrange
+        using var activity = new Activity(ZipkinSpanName);
+        activity.Start();
+        activity.AddEvent(new ActivityEvent("NoAttributesEvent"));
+        activity.Stop();
+
+        // Act
+        var zipkinSpan = activity.ToZipkinSpan(DefaultZipkinEndpoint);
+
+        // Assert
+        var annotation = Assert.Single(zipkinSpan.Annotations);
+        Assert.Equal("NoAttributesEvent", annotation.Value);
+    }
+
+    [Fact]
+    public void ToZipkinSpan_Event_With_Attributes_AppendsJsonObjectToAnnotationValue()
+    {
+        // Arrange
+        using var activity = new Activity(ZipkinSpanName);
+        activity.Start();
+        activity.AddEvent(new ActivityEvent(
+            "exception",
+            tags: new ActivityTagsCollection
+            {
+                ["exception.type"] = "System.InvalidOperationException",
+                ["exception.message"] = "Boom",
+            }));
+        activity.Stop();
+
+        // Act
+        var zipkinSpan = activity.ToZipkinSpan(DefaultZipkinEndpoint);
+
+        // Assert
+        var annotation = Assert.Single(zipkinSpan.Annotations);
+        Assert.Equal(
+            $@"exception: {{""exception.type"":""System.InvalidOperationException"",""exception.message"":""Boom""}}",
+            annotation.Value);
+    }
+
+    [Fact]
+    public void ToZipkinSpan_Event_With_Only_Unsupported_Attributes_UsesEventNameOnly()
+    {
+        // Arrange
+        using var activity = new Activity(ZipkinSpanName);
+        activity.Start();
+        activity.AddEvent(new ActivityEvent(
+            "nullValuedAttributeOnly",
+            tags: new ActivityTagsCollection
+            {
+                ["nullKey"] = null,
+            }));
+        activity.Stop();
+
+        // Act
+        var zipkinSpan = activity.ToZipkinSpan(DefaultZipkinEndpoint);
+
+        // Assert
+        var annotation = Assert.Single(zipkinSpan.Annotations);
+        Assert.Equal("nullValuedAttributeOnly", annotation.Value);
     }
 
     [Fact]
@@ -293,5 +370,79 @@ public class ZipkinActivityConversionTests
 
         // Ensure additional Activity tags were being converted.
         Assert.Contains(zipkinSpan.Tags, t => t.Key == "myCustomTag" && (string?)t.Value == "myCustomTagValue");
+    }
+
+    [Fact]
+    public void ToZipkinSpan_ByteArrayTag_IsBase64Encoded()
+    {
+        // Arrange
+        using var activity = new Activity(ZipkinSpanName);
+        activity.Start();
+        activity.SetTag("bytes", new byte[] { 1, 2, 3 });
+        activity.Stop();
+
+        var zipkinSpan = activity.ToZipkinSpan(DefaultZipkinEndpoint);
+
+        // Act
+        using var stream = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(stream))
+        {
+            zipkinSpan.Write(writer);
+        }
+
+        var json = Encoding.UTF8.GetString(stream.GetBuffer(), 0, (int)stream.Length);
+
+        // Assert
+
+        // Per https://github.com/open-telemetry/opentelemetry-specification/blob/main/specification/common/README.md#byte-arrays,
+        // byte arrays SHOULD be Base64-encoded rather than serialized as a JSON array of numbers.
+        Assert.Contains(@"""bytes"":""AQID""", json, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ToZipkinSpan_MapValuedTag_MembersPreserveNativeJsonTyping()
+    {
+        // Arrange
+        int[] arr = [1, 2];
+        byte[] bytes = [1, 2, 3];
+
+        using var activity = new Activity(ZipkinSpanName);
+        activity.Start();
+        activity.SetTag(
+            "mapTag",
+            new Dictionary<string, object?>
+            {
+                ["str"] = "value",
+                ["num"] = 42,
+                ["flag"] = true,
+                ["nan"] = double.NaN,
+                ["arr"] = arr,
+                ["nested"] = new Dictionary<string, object?> { ["inner"] = 1 },
+                ["bytes"] = bytes,
+                ["empty"] = null,
+            });
+        activity.Stop();
+
+        var zipkinSpan = activity.ToZipkinSpan(DefaultZipkinEndpoint);
+
+        // Act
+        using var stream = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(stream))
+        {
+            zipkinSpan.Write(writer);
+        }
+
+        using var document = JsonDocument.Parse(stream.ToArray());
+        var mapTagValue = document.RootElement.GetProperty("tags").GetProperty("mapTag").GetString();
+
+        // Assert
+
+        // Per https://github.com/open-telemetry/opentelemetry-specification/blob/v1.60.0/specification/common/README.md#maps,
+        // map values follow the same encoding rules as array elements: numbers/booleans/arrays/maps
+        // keep their native JSON typing, and only strings, byte arrays, and non-finite floating
+        // point values are quoted.
+        Assert.Equal(
+            """{"str":"value","num":42,"flag":true,"nan":"NaN","arr":[1,2],"nested":{"inner":1},"bytes":"AQID","empty":null}""",
+            mapTagValue);
     }
 }

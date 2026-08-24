@@ -443,7 +443,7 @@ public sealed class ZipkinExporterTests : IDisposable
             + @"""duration"":60000000,"
             + $@"""localEndpoint"":{{""serviceName"":""{serviceName}""{ipInformation}}},"
             + @"""remoteEndpoint"":{""serviceName"":""http://localhost:44312/""},"
-            + $@"""annotations"":[{{""timestamp"":{eventTimestamp},""value"":""Event1""}},{{""timestamp"":{eventTimestamp},""value"":""Event2""}}],"
+            + $@"""annotations"":[{{""timestamp"":{eventTimestamp},""value"":""Event1: {{\u0022key\u0022:\u0022value\u0022}}""}},{{""timestamp"":{eventTimestamp},""value"":""Event2: {{\u0022key\u0022:\u0022value\u0022}}""}}],"
             + @"""tags"":{"
                 + resourceTags
                 + $@"""stringKey"":""value"","
@@ -457,6 +457,7 @@ public sealed class ZipkinExporterTests : IDisposable
                 + @"""http.host"":""http://localhost:44312/"","
                 + $@"""dateTimeKey"":""{Convert.ToString(dateTime, CultureInfo.InvariantCulture)}"","
                 + $@"""dateTimeArrayKey"":""[\u0022{Convert.ToString(dateTime, CultureInfo.InvariantCulture)}\u0022]"","
+                + $@"""mapKey"":""{{\u0022nested1\u0022:\u0022value1\u0022,\u0022nested2\u0022:42}}"","
                 + $@"""peer.service"":""http://localhost:44312/"","
                 + statusTag
                 + errorTag

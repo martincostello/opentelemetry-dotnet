@@ -135,15 +135,26 @@ public class ConsoleKvListAttributeTests
     [Fact]
     public void KvListWithByteArrayValue()
     {
-        // The console exporter has no byte array representation, so a byte[] is
-        // written as a JSON array of numbers rather than being dropped.
+        // Per https://github.com/open-telemetry/opentelemetry-specification/blob/main/specification/common/README.md#byte-arrays,
+        // byte arrays are represented as Base64-encoded strings.
         var kvList = new List<KeyValuePair<string, object?>>
         {
             new("bytes", new byte[] { 1, 2, 3 }),
         };
 
         Assert.True(this.tagWriter.TryTransformTag("key", kvList, out var result));
-        Assert.Equal("""{"bytes":[1,2,3]}""", result.Value);
+        Assert.Equal("""{"bytes":"AQID"}""", result.Value);
+        Assert.Empty(this.droppedTags);
+    }
+
+    [Fact]
+    public void TopLevelByteArrayValueIsBase64Encoded()
+    {
+        // A top-level (non-nested) byte array SHOULD be Base64-encoded and, per
+        // https://github.com/open-telemetry/opentelemetry-specification/blob/main/specification/common/README.md#byte-arrays,
+        // SHOULD NOT be quoted as an explicit JSON string.
+        Assert.True(this.tagWriter.TryTransformTag("key", new byte[] { 1, 2, 3 }, out var result));
+        Assert.Equal("AQID", result.Value);
         Assert.Empty(this.droppedTags);
     }
 

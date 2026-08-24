@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using System.Diagnostics;
+using System.Text;
+using System.Text.Json;
 using OpenTelemetry.Internal;
 using OpenTelemetry.Trace;
 
@@ -12,6 +14,7 @@ internal static class ZipkinActivityConversionExtensions
     internal const string ZipkinErrorFlagTagName = "error";
     internal const int MaxRemoteEndpointCacheSize = 1024;
     private const long TicksPerMicrosecond = TimeSpan.TicksPerMillisecond / 1000;
+    private const int EmptyJsonObjectUtf8ByteLength = 2; // "{}"
     private const long UnixEpochTicks = 621355968000000000L; // = DateTimeOffset.FromUnixTimeMilliseconds(0).Ticks
     private const long UnixEpochMicroseconds = UnixEpochTicks / TicksPerMicrosecond;
 
@@ -309,10 +312,54 @@ internal static class ZipkinActivityConversionExtensions
         do
         {
             var @event = enumerator.Current;
-            PooledList<ZipkinAnnotation>.Add(ref annotations, new ZipkinAnnotation(@event.Timestamp.ToEpochMicroseconds(), @event.Name));
+            PooledList<ZipkinAnnotation>.Add(ref annotations, new ZipkinAnnotation(@event.Timestamp.ToEpochMicroseconds(), GetAnnotationValue(@event)));
         }
         while (enumerator.MoveNext());
 
         return annotations;
+    }
+
+    // Per https://github.com/open-telemetry/opentelemetry-specification/blob/main/specification/trace/sdk_exporters/zipkin.md#events,
+    // an Event's attributes are not supported by Zipkin's Annotation model, so when present they
+    // are appended to the annotation value as a JSON object, e.g. "my-event-name: {"key1":"value1"}".
+    private static string GetAnnotationValue(ActivityEvent activityEvent)
+    {
+        var tagEnumerator = activityEvent.EnumerateTagObjects();
+        if (!tagEnumerator.MoveNext())
+        {
+            return activityEvent.Name;
+        }
+
+        using var stream = new MemoryStream();
+        var writer = new Utf8JsonWriter(stream);
+
+        try
+        {
+            writer.WriteStartObject();
+
+            do
+            {
+                ZipkinTagWriter.Instance.TryWriteTag(ref writer, tagEnumerator.Current);
+            }
+            while (tagEnumerator.MoveNext());
+
+            writer.WriteEndObject();
+            writer.Flush();
+        }
+        finally
+        {
+            writer.Dispose();
+        }
+
+        if (stream.Length <= EmptyJsonObjectUtf8ByteLength)
+        {
+            // Every attribute was dropped (e.g. null values or unsupported types), so there is
+            // nothing to add beyond the event name.
+            return activityEvent.Name;
+        }
+
+        var jsonAttributes = Encoding.UTF8.GetString(stream.GetBuffer(), 0, (int)stream.Length);
+
+        return $"{activityEvent.Name}: {jsonAttributes}";
     }
 }
