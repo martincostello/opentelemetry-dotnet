@@ -19,6 +19,7 @@ public sealed class LoggerProviderTests
 
         Assert.Equal(string.Empty, logger.Name);
         Assert.Null(logger.Version);
+        Assert.Null(logger.SchemaUrl);
     }
 
     [Fact]
@@ -33,6 +34,7 @@ public sealed class LoggerProviderTests
 
         Assert.Equal("TestLogger", logger.Name);
         Assert.Equal("Version", logger.Version);
+        Assert.Null(logger.SchemaUrl);
 
         logger = provider.GetLogger(name: "TestLogger");
 
@@ -41,6 +43,7 @@ public sealed class LoggerProviderTests
 
         Assert.Equal("TestLogger", logger.Name);
         Assert.Null(logger.Version);
+        Assert.Null(logger.SchemaUrl);
 
         logger = provider.GetLogger();
 
@@ -49,6 +52,22 @@ public sealed class LoggerProviderTests
 
         Assert.Equal(string.Empty, logger.Name);
         Assert.Null(logger.Version);
+        Assert.Null(logger.SchemaUrl);
+    }
+
+    [Fact]
+    public void LoggerReturnedWithInstrumentationScopeIncludingSchemaUrlTest()
+    {
+        using var provider = new TestLoggerProvider();
+
+        var logger = provider.GetLogger(name: "TestLogger", version: "Version", schemaUrl: "https://example.com/schema");
+
+        Assert.NotNull(logger);
+        Assert.Equal(typeof(TestLogger), logger.GetType());
+
+        Assert.Equal("TestLogger", logger.Name);
+        Assert.Equal("Version", logger.Version);
+        Assert.Equal("https://example.com/schema", logger.SchemaUrl);
     }
 
     private sealed class NoopLoggerProvider : LoggerProvider

@@ -10,6 +10,12 @@ internal sealed class InstrumentationScopeLogger : Logger
 {
     private static readonly ConcurrentDictionary<string, InstrumentationScopeLogger> Cache = new();
 
+    public InstrumentationScopeLogger(string? name, string? version, string? schemaUrl)
+        : base(name)
+    {
+        this.SetInstrumentationScope(version, schemaUrl);
+    }
+
     private InstrumentationScopeLogger(string name)
         : base(name)
     {

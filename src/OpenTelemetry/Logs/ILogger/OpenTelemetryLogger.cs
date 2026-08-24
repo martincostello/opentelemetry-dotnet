@@ -36,7 +36,7 @@ internal sealed class OpenTelemetryLogger : ILogger
         this.provider = provider;
         this.options = options;
 
-        this.instrumentationScope = InstrumentationScopeLogger.GetInstrumentationScopeLoggerForName(categoryName);
+        this.instrumentationScope = new InstrumentationScopeLogger(categoryName, options.Version, options.SchemaUrl);
     }
 
     internal IExternalScopeProvider? ScopeProvider { get; set; }

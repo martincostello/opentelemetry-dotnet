@@ -49,6 +49,13 @@ abstract class Logger
     public string? Version { get; private set; }
 
     /// <summary>
+    /// Gets the schema URL of the instrumentation library.
+    /// </summary>
+#pragma warning disable CA1056 // Change the type of property from 'string' to 'System.Uri'
+    public string? SchemaUrl { get; private set; }
+#pragma warning restore CA1056 // Change the type of property from 'string' to 'System.Uri'
+
+    /// <summary>
     /// Emit a log.
     /// </summary>
     /// <param name="data"><see cref="LogRecordData"/>.</param>
@@ -64,5 +71,9 @@ abstract class Logger
         in LogRecordData data,
         in LogRecordAttributeList attributes);
 
-    internal void SetInstrumentationScope(string? version) => this.Version = version;
+    internal void SetInstrumentationScope(string? version, string? schemaUrl)
+    {
+        this.Version = version;
+        this.SchemaUrl = schemaUrl;
+    }
 }

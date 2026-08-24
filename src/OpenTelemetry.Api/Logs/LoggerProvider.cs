@@ -67,6 +67,28 @@ public class LoggerProvider : BaseProvider
     internal
 #endif
         Logger GetLogger(string? name, string? version)
+        => this.GetLogger(name, version, schemaUrl: null);
+
+#if EXPOSE_EXPERIMENTAL_FEATURES
+    /// <summary>
+    /// Gets a logger with the given name, version, and schema URL.
+    /// </summary>
+    /// <remarks><inheritdoc cref="Logger" path="/remarks"/></remarks>
+    /// <param name="name">Optional name identifying the instrumentation library.</param>
+    /// <param name="version">Optional version of the instrumentation library.</param>
+    /// <param name="schemaUrl">Optional schema URL of the instrumentation library.</param>
+    /// <returns><see cref="Logger"/> instance.</returns>
+    [Experimental(DiagnosticDefinitions.LogsBridgeExperimentalApi, UrlFormat = DiagnosticDefinitions.ExperimentalApiUrlFormat)]
+    public
+#else
+    internal
+#endif
+        Logger GetLogger(
+        string? name,
+        string? version,
+#pragma warning disable CA1054 // Change the type of parameter from 'string' to 'System.Uri'
+        string? schemaUrl)
+#pragma warning restore CA1054 // Change the type of parameter from 'string' to 'System.Uri'
     {
         if (!this.TryCreateLogger(name, out var logger))
         {
@@ -74,9 +96,9 @@ public class LoggerProvider : BaseProvider
         }
 
 #if NET
-        logger.SetInstrumentationScope(version);
+        logger.SetInstrumentationScope(version, schemaUrl);
 #else
-        logger!.SetInstrumentationScope(version);
+        logger!.SetInstrumentationScope(version, schemaUrl);
 #endif
 
         return logger;
