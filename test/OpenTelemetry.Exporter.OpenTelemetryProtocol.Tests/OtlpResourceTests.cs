@@ -68,6 +68,40 @@ public class OtlpResourceTests
     }
 
     [Fact]
+    public void ToOtlpResourceTest_EntityRefs()
+    {
+        var resource = ResourceBuilder.CreateEmpty()
+            .AddService("service-name", "ns1", "1.2.3")
+            .Build();
+
+        var buffer = new byte[1024];
+        var writePosition = ProtobufOtlpResourceSerializer.WriteResource(buffer, 0, resource);
+
+        Proto.Resource.V1.Resource otlpResource;
+        using (var stream = new MemoryStream(buffer, 0, writePosition))
+        {
+            var resourceSpans = ResourceSpans.Parser.ParseFrom(stream);
+            otlpResource = resourceSpans.Resource;
+        }
+
+        var entityRef = Assert.Single(otlpResource.EntityRefs);
+        Assert.Equal(ResourceSemanticConventions.EntityTypeService, entityRef.Type);
+        Assert.Equal([ResourceSemanticConventions.AttributeServiceName], entityRef.IdKeys);
+        Assert.Contains(ResourceSemanticConventions.AttributeServiceNamespace, entityRef.DescriptionKeys);
+        Assert.Contains(ResourceSemanticConventions.AttributeServiceVersion, entityRef.DescriptionKeys);
+
+        foreach (var idKey in entityRef.IdKeys)
+        {
+            Assert.Contains(otlpResource.Attributes, kvp => kvp.Key == idKey);
+        }
+
+        foreach (var descriptionKey in entityRef.DescriptionKeys)
+        {
+            Assert.Contains(otlpResource.Attributes, kvp => kvp.Key == descriptionKey);
+        }
+    }
+
+    [Fact]
     public void WriteResourceDoesNotKeepResourceAlive()
     {
         var reference = CreateSerializedResourceWeakReference();

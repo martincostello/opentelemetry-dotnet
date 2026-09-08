@@ -19,6 +19,13 @@ internal static class ProtobufOtlpTraceFieldNumberConstants
 
     // Resource
     internal const int Resource_Attributes = 1;
+    internal const int Resource_Entity_Refs = 3;
+
+    // EntityRef
+    internal const int EntityRef_Schema_Url = 1;
+    internal const int EntityRef_Type = 2;
+    internal const int EntityRef_Id_Keys = 3;
+    internal const int EntityRef_Description_Keys = 4;
 
     // ScopeSpans
     internal const int ScopeSpans_Scope = 1;

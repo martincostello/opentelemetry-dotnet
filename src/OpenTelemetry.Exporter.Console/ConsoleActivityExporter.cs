@@ -151,6 +151,11 @@ public class ConsoleActivityExporter : ConsoleExporter<Activity>
                 {
                     this.WriteLine($"    Schema URL: {resource.SchemaUrl}");
                 }
+
+                foreach (var entity in resource.Entities)
+                {
+                    this.WriteLine($"    Entity: {entity.Type} (id: {string.Join(", ", entity.IdentifyingAttributes.Select(a => a.Key))})");
+                }
             }
 
             this.WriteLine(string.Empty);

@@ -505,6 +505,43 @@ public sealed class ResourceTests : IDisposable
     }
 
     [Fact]
+    public void Entity_RequiresAtLeastOneIdentifyingAttribute()
+    {
+        Assert.Throws<ArgumentException>(() => new Entity("service", []));
+    }
+
+    [Fact]
+    public void MergeResource_Entities_NoOverlap_ConcatenatesBoth()
+    {
+        var serviceEntity = new Entity("service", [new(KeyName, ValueName)]);
+        var hostEntity = new Entity("host", [new("host.id", "host-1")]);
+
+        var current = new Resource([], schemaUrl: null, [serviceEntity]);
+        var updating = new Resource([], schemaUrl: null, [hostEntity]);
+
+        var merged = current.Merge(updating);
+
+        Assert.Equal(2, merged.Entities.Count);
+        Assert.Contains(serviceEntity, merged.Entities);
+        Assert.Contains(hostEntity, merged.Entities);
+    }
+
+    [Fact]
+    public void MergeResource_Entities_UpdatingOverridesCurrentByType()
+    {
+        var oldServiceEntity = new Entity("service", [new(KeyName, "old")]);
+        var newServiceEntity = new Entity("service", [new(KeyName, "new")]);
+
+        var current = new Resource([], schemaUrl: null, [oldServiceEntity]);
+        var updating = new Resource([], schemaUrl: null, [newServiceEntity]);
+
+        var merged = current.Merge(updating);
+
+        var entity = Assert.Single(merged.Entities);
+        Assert.Same(newServiceEntity, entity);
+    }
+
+    [Fact]
     public void ResourceBuilder_AddAttributes_WithSchemaUrl_IsPropagatedByBuild()
     {
         const string SchemaUrl = "https://opentelemetry.io/schemas/1.36.0";

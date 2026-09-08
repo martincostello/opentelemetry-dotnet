@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using OpenTelemetry.Internal;
 
 namespace OpenTelemetry.Resources;
@@ -12,6 +13,7 @@ namespace OpenTelemetry.Resources;
 public class ResourceBuilder
 {
     internal readonly List<IResourceDetector> ResourceDetectors = [];
+    internal readonly List<IEntityDetector> EntityDetectors = [];
     private static readonly Resource DefaultResource = PrepareDefaultResource();
 
     private ResourceBuilder()
@@ -51,6 +53,7 @@ public class ResourceBuilder
     public ResourceBuilder Clear()
     {
         this.ResourceDetectors.Clear();
+        this.EntityDetectors.Clear();
 
         return this;
     }
@@ -77,6 +80,11 @@ public class ResourceBuilder
             }
         }
 
+        if (this.EntityDetectors.Count > 0)
+        {
+            finalResource = MergeEntities(finalResource, this.EntityDetectors);
+        }
+
         return finalResource;
     }
 
@@ -90,6 +98,27 @@ public class ResourceBuilder
         Guard.ThrowIfNull(resourceDetector);
 
         this.ResourceDetectors.Add(resourceDetector);
+
+        return this;
+    }
+
+    /// <summary>
+    /// Add a <see cref="IEntityDetector"/> to the builder.
+    /// </summary>
+    /// <param name="entityDetector"><see cref="IEntityDetector"/>.</param>
+    /// <returns>Supplied <see cref="ResourceBuilder"/> for call chaining.</returns>
+    /// <remarks>
+    /// <para experimental-warning="true"><b>WARNING</b>: This is an experimental API which might change or be removed in the future. Use at your own risk.</para>
+    /// The attributes contributed by <paramref name="entityDetector"/> are automatically added to
+    /// the built <see cref="Resource"/>'s <see cref="Resource.Attributes"/>, in addition to being
+    /// exposed via <see cref="Resource.Entities"/>.
+    /// </remarks>
+    [Experimental(DiagnosticDefinitions.EntitiesExperimentalApi, UrlFormat = DiagnosticDefinitions.ExperimentalApiUrlFormat)]
+    public ResourceBuilder AddEntityDetector(IEntityDetector entityDetector)
+    {
+        Guard.ThrowIfNull(entityDetector);
+
+        this.EntityDetectors.Add(entityDetector);
 
         return this;
     }
@@ -132,6 +161,55 @@ public class ResourceBuilder
         return this;
     }
 
+    internal ResourceBuilder AddEntity(Entity entity)
+    {
+        Guard.ThrowIfNull(entity);
+
+        return this.AddEntityDetector(new WrapperEntityDetector(entity));
+    }
+
+    // Folds the entities contributed by entityDetectors into resource, both as Resource.Entities and
+    // (per the OTLP entity_refs contract) as attributes on the Resource itself. Attributes explicitly
+    // contributed by IResourceDetectors take precedence over attributes derived from entities.
+    //
+    // Note: for simplicity this proof-of-concept does not preserve resource.HasSchemaUrlConflict across
+    // this final merge step.
+    private static Resource MergeEntities(Resource resource, List<IEntityDetector> entityDetectors)
+    {
+        var entities = new Dictionary<string, Entity>(StringComparer.Ordinal);
+        var entityAttributes = new Dictionary<string, object>();
+
+        foreach (var entityDetector in entityDetectors)
+        {
+            foreach (var entity in entityDetector.Detect())
+            {
+                entities[entity.Type] = entity;
+
+                foreach (var attribute in entity.IdentifyingAttributes)
+                {
+                    entityAttributes[attribute.Key] = attribute.Value;
+                }
+
+                foreach (var attribute in entity.DescriptiveAttributes)
+                {
+                    entityAttributes[attribute.Key] = attribute.Value;
+                }
+            }
+        }
+
+        if (entities.Count == 0)
+        {
+            return resource;
+        }
+
+        foreach (var attribute in resource.Attributes)
+        {
+            entityAttributes[attribute.Key] = attribute.Value;
+        }
+
+        return new Resource(entityAttributes, resource.SchemaUrl, entities.Values);
+    }
+
     private static Resource PrepareDefaultResource()
     {
         var defaultServiceName = "unknown_service";
@@ -165,6 +243,18 @@ public class ResourceBuilder
         }
 
         public Resource Detect() => this.resource;
+    }
+
+    internal sealed class WrapperEntityDetector : IEntityDetector
+    {
+        private readonly Entity entity;
+
+        public WrapperEntityDetector(Entity entity)
+        {
+            this.entity = entity;
+        }
+
+        public IEnumerable<Entity> Detect() => [this.entity];
     }
 
     private sealed class ResolvingResourceDetector : IResourceDetector

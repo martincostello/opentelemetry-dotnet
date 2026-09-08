@@ -1,6 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using OpenTelemetry.Internal;
 
@@ -32,14 +33,36 @@ public class Resource
 #pragma warning disable CA1054 // Change the type of parameter from 'string' to 'System.Uri'
     public Resource(IEnumerable<KeyValuePair<string, object>> attributes, string? schemaUrl)
 #pragma warning restore CA1054 // Change the type of parameter from 'string' to 'System.Uri'
-        : this(attributes, schemaUrl, schemaUrlConflict: false)
+        : this(attributes, schemaUrl, schemaUrlConflict: false, entities: null)
     {
     }
 
-    private Resource(IEnumerable<KeyValuePair<string, object>> attributes, string? schemaUrl, bool schemaUrlConflict)
+    /// <summary>
+    /// Initializes a new instance of the <see cref="Resource"/> class.
+    /// </summary>
+    /// <param name="attributes">An <see cref="IEnumerable{T}"/> of attributes that describe the resource.</param>
+    /// <param name="schemaUrl">The Schema URL (semantic conventions URL) that applies to the resource, or <see langword="null"/> if the resource has no Schema URL.</param>
+    /// <param name="entities">An <see cref="IEnumerable{T}"/> of <see cref="Entity"/> instances that participate in the resource.</param>
+    /// <remarks>
+    /// <para experimental-warning="true"><b>WARNING</b>: This is an experimental API which might change or be removed in the future. Use at your own risk.</para>
+    /// The keys of <see cref="Entity.IdentifyingAttributes"/> and <see cref="Entity.DescriptiveAttributes"/> for
+    /// every entity in <paramref name="entities"/> are expected to also be present in <paramref name="attributes"/>.
+    /// Prefer building entity-aware resources via <see cref="ResourceBuilder.AddEntityDetector(IEntityDetector)"/>,
+    /// which maintains this invariant automatically.
+    /// </remarks>
+#pragma warning disable CA1054 // Change the type of parameter from 'string' to 'System.Uri'
+    [Experimental(DiagnosticDefinitions.EntitiesExperimentalApi, UrlFormat = DiagnosticDefinitions.ExperimentalApiUrlFormat)]
+    public Resource(IEnumerable<KeyValuePair<string, object>> attributes, string? schemaUrl, IEnumerable<Entity>? entities)
+#pragma warning restore CA1054 // Change the type of parameter from 'string' to 'System.Uri'
+        : this(attributes, schemaUrl, schemaUrlConflict: false, entities)
+    {
+    }
+
+    private Resource(IEnumerable<KeyValuePair<string, object>> attributes, string? schemaUrl, bool schemaUrlConflict, IEnumerable<Entity>? entities)
     {
         this.SchemaUrl = string.IsNullOrEmpty(schemaUrl) ? null : schemaUrl;
         this.HasSchemaUrlConflict = schemaUrlConflict;
+        this.Entities = entities as IReadOnlyList<Entity> ?? entities?.ToList() ?? [];
 
         if (attributes == null)
         {
@@ -61,6 +84,15 @@ public class Resource
     /// Gets the collection of key-value pairs describing the resource.
     /// </summary>
     public IEnumerable<KeyValuePair<string, object>> Attributes { get; }
+
+    /// <summary>
+    /// Gets the collection of <see cref="Entity"/> instances that participate in the resource.
+    /// </summary>
+    /// <remarks>
+    /// <para experimental-warning="true"><b>WARNING</b>: This is an experimental API which might change or be removed in the future. Use at your own risk.</para>
+    /// </remarks>
+    [Experimental(DiagnosticDefinitions.EntitiesExperimentalApi, UrlFormat = DiagnosticDefinitions.ExperimentalApiUrlFormat)]
+    public IReadOnlyList<Entity> Entities { get; }
 
 #pragma warning disable CA1056 // Change the type of property from 'string' to 'System.Uri'
     /// <summary>
@@ -114,7 +146,39 @@ public class Resource
 
         var mergedSchemaUrl = MergeSchemaUrl(this.SchemaUrl, other?.SchemaUrl, ref conflict);
 
-        return new Resource(newAttributes, mergedSchemaUrl, conflict);
+        var mergedEntities = MergeEntities(this.Entities, other?.Entities);
+
+        return new Resource(newAttributes, mergedSchemaUrl, conflict, mergedEntities);
+    }
+
+    // Merges entities by Type, giving precedence to "other" in the event of a collision, consistent
+    // with attribute merge precedence above.
+    private static IReadOnlyList<Entity> MergeEntities(IReadOnlyList<Entity> current, IReadOnlyList<Entity>? other)
+    {
+        if (current.Count == 0 && (other == null || other.Count == 0))
+        {
+            return [];
+        }
+
+        var merged = new Dictionary<string, Entity>(StringComparer.Ordinal);
+
+        if (other != null)
+        {
+            foreach (var entity in other)
+            {
+                merged[entity.Type] = entity;
+            }
+        }
+
+        foreach (var entity in current)
+        {
+            if (!merged.ContainsKey(entity.Type))
+            {
+                merged[entity.Type] = entity;
+            }
+        }
+
+        return [.. merged.Values];
     }
 
     // Implements the Schema URL merge logic from

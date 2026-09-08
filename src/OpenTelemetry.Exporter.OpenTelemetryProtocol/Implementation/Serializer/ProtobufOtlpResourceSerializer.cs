@@ -87,6 +87,11 @@ internal static class ProtobufOtlpResourceSerializer
             }
         }
 
+        for (var i = 0; i < resource.Entities.Count; i++)
+        {
+            WriteEntityRef(ref otlpTagWriterState, resource.Entities[i]);
+        }
+
         var resourceLength = otlpTagWriterState.WritePosition - (resourceLengthPosition + ReserveSizeForLength);
         ProtobufSerializer.WriteReservedLength(otlpTagWriterState.Buffer, resourceLengthPosition, resourceLength);
 
@@ -99,4 +104,31 @@ internal static class ProtobufOtlpResourceSerializer
             ProtobufOtlpTraceFieldNumberConstants.Resource_Attributes,
             attribute.Key,
             attribute.Value);
+
+    private static void WriteEntityRef(ref ProtobufOtlpTagWriter.OtlpTagWriterState otlpTagWriterState, Entity entity)
+    {
+        otlpTagWriterState.WritePosition = ProtobufSerializer.WriteTag(otlpTagWriterState.Buffer, otlpTagWriterState.WritePosition, ProtobufOtlpTraceFieldNumberConstants.Resource_Entity_Refs, ProtobufWireType.LEN);
+        var entityRefLengthPosition = otlpTagWriterState.WritePosition;
+        otlpTagWriterState.WritePosition += ReserveSizeForLength;
+
+        if (entity.SchemaUrl != null)
+        {
+            otlpTagWriterState.WritePosition = ProtobufSerializer.WriteStringWithTag(otlpTagWriterState.Buffer, otlpTagWriterState.WritePosition, ProtobufOtlpTraceFieldNumberConstants.EntityRef_Schema_Url, entity.SchemaUrl);
+        }
+
+        otlpTagWriterState.WritePosition = ProtobufSerializer.WriteStringWithTag(otlpTagWriterState.Buffer, otlpTagWriterState.WritePosition, ProtobufOtlpTraceFieldNumberConstants.EntityRef_Type, entity.Type);
+
+        for (var i = 0; i < entity.IdentifyingAttributes.Count; i++)
+        {
+            otlpTagWriterState.WritePosition = ProtobufSerializer.WriteStringWithTag(otlpTagWriterState.Buffer, otlpTagWriterState.WritePosition, ProtobufOtlpTraceFieldNumberConstants.EntityRef_Id_Keys, entity.IdentifyingAttributes[i].Key);
+        }
+
+        for (var i = 0; i < entity.DescriptiveAttributes.Count; i++)
+        {
+            otlpTagWriterState.WritePosition = ProtobufSerializer.WriteStringWithTag(otlpTagWriterState.Buffer, otlpTagWriterState.WritePosition, ProtobufOtlpTraceFieldNumberConstants.EntityRef_Description_Keys, entity.DescriptiveAttributes[i].Key);
+        }
+
+        var entityRefLength = otlpTagWriterState.WritePosition - (entityRefLengthPosition + ReserveSizeForLength);
+        ProtobufSerializer.WriteReservedLength(otlpTagWriterState.Buffer, entityRefLengthPosition, entityRefLength);
+    }
 }

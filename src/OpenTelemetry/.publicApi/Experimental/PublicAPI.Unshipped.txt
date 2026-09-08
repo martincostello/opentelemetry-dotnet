@@ -25,3 +25,14 @@
 [OTEL1000]static Microsoft.Extensions.Logging.OpenTelemetryLoggingExtensions.UseOpenTelemetry(this Microsoft.Extensions.Logging.ILoggingBuilder! builder, System.Action<OpenTelemetry.Logs.LoggerProviderBuilder!>? configureBuilder, System.Action<OpenTelemetry.Logs.OpenTelemetryLoggerOptions!>? configureOptions) -> Microsoft.Extensions.Logging.ILoggingBuilder!
 [OTEL1001]static OpenTelemetry.Sdk.CreateLoggerProviderBuilder() -> OpenTelemetry.Logs.LoggerProviderBuilder!
 [OTEL1004]virtual OpenTelemetry.Metrics.FixedSizeExemplarReservoir.OnCollected() -> void
+[OTEL1006]OpenTelemetry.Resources.Entity
+[OTEL1006]OpenTelemetry.Resources.Entity.DescriptiveAttributes.get -> System.Collections.Generic.IReadOnlyList<System.Collections.Generic.KeyValuePair<string!, object!>>!
+[OTEL1006]OpenTelemetry.Resources.Entity.Entity(string! type, System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string!, object!>>! identifyingAttributes, System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string!, object!>>? descriptiveAttributes = null, string? schemaUrl = null) -> void
+[OTEL1006]OpenTelemetry.Resources.Entity.IdentifyingAttributes.get -> System.Collections.Generic.IReadOnlyList<System.Collections.Generic.KeyValuePair<string!, object!>>!
+[OTEL1006]OpenTelemetry.Resources.Entity.SchemaUrl.get -> string?
+[OTEL1006]OpenTelemetry.Resources.Entity.Type.get -> string!
+[OTEL1006]OpenTelemetry.Resources.IEntityDetector
+[OTEL1006]OpenTelemetry.Resources.IEntityDetector.Detect() -> System.Collections.Generic.IEnumerable<OpenTelemetry.Resources.Entity!>!
+[OTEL1006]OpenTelemetry.Resources.Resource.Entities.get -> System.Collections.Generic.IReadOnlyList<OpenTelemetry.Resources.Entity!>!
+[OTEL1006]OpenTelemetry.Resources.Resource.Resource(System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string!, object!>>! attributes, string? schemaUrl, System.Collections.Generic.IEnumerable<OpenTelemetry.Resources.Entity!>? entities) -> void
+[OTEL1006]OpenTelemetry.Resources.ResourceBuilder.AddEntityDetector(OpenTelemetry.Resources.IEntityDetector! entityDetector) -> OpenTelemetry.Resources.ResourceBuilder!

@@ -21,6 +21,18 @@ public static class ResourceBuilderExtensions
         [ResourceSemanticConventions.AttributeTelemetrySdkVersion] = Sdk.InformationalVersion,
     });
 
+    private static Entity TelemetryEntity { get; } = new Entity(
+        ResourceSemanticConventions.EntityTypeTelemetrySdk,
+        identifyingAttributes: new Dictionary<string, object>
+        {
+            [ResourceSemanticConventions.AttributeTelemetrySdkName] = "opentelemetry",
+            [ResourceSemanticConventions.AttributeTelemetrySdkLanguage] = "dotnet",
+        },
+        descriptiveAttributes: new Dictionary<string, object>
+        {
+            [ResourceSemanticConventions.AttributeTelemetrySdkVersion] = Sdk.InformationalVersion,
+        });
+
     /// <summary>
     /// Adds service information to a <see cref="ResourceBuilder"/>
     /// following <a
@@ -50,12 +62,16 @@ public static class ResourceBuilderExtensions
             { ResourceSemanticConventions.AttributeServiceName, serviceName },
         };
 
+        var serviceEntityDescriptiveAttributes = new Dictionary<string, object>();
+
         if (!string.IsNullOrEmpty(serviceNamespace))
         {
 #if NET || NETSTANDARD2_1_OR_GREATER
             resourceAttributes.Add(ResourceSemanticConventions.AttributeServiceNamespace, serviceNamespace);
+            serviceEntityDescriptiveAttributes.Add(ResourceSemanticConventions.AttributeServiceNamespace, serviceNamespace);
 #else
             resourceAttributes.Add(ResourceSemanticConventions.AttributeServiceNamespace, serviceNamespace!);
+            serviceEntityDescriptiveAttributes.Add(ResourceSemanticConventions.AttributeServiceNamespace, serviceNamespace!);
 #endif
         }
 
@@ -63,8 +79,10 @@ public static class ResourceBuilderExtensions
         {
 #if NET || NETSTANDARD2_1_OR_GREATER
             resourceAttributes.Add(ResourceSemanticConventions.AttributeServiceVersion, serviceVersion);
+            serviceEntityDescriptiveAttributes.Add(ResourceSemanticConventions.AttributeServiceVersion, serviceVersion);
 #else
             resourceAttributes.Add(ResourceSemanticConventions.AttributeServiceVersion, serviceVersion!);
+            serviceEntityDescriptiveAttributes.Add(ResourceSemanticConventions.AttributeServiceVersion, serviceVersion!);
 #endif
         }
 
@@ -76,10 +94,18 @@ public static class ResourceBuilderExtensions
         if (serviceInstanceId != null)
         {
             resourceAttributes.Add(ResourceSemanticConventions.AttributeServiceInstance, serviceInstanceId);
+            serviceEntityDescriptiveAttributes.Add(ResourceSemanticConventions.AttributeServiceInstance, serviceInstanceId);
         }
 
+        var serviceEntity = new Entity(
+            ResourceSemanticConventions.EntityTypeService,
+            identifyingAttributes: new Dictionary<string, object> { [ResourceSemanticConventions.AttributeServiceName] = serviceName },
+            descriptiveAttributes: serviceEntityDescriptiveAttributes);
+
 #pragma warning disable CA1062 // Validate arguments of public methods - needed for netstandard2.1
-        return resourceBuilder.AddResource(new Resource(resourceAttributes));
+        return resourceBuilder
+            .AddResource(new Resource(resourceAttributes))
+            .AddEntity(serviceEntity);
 #pragma warning restore CA1062 // Validate arguments of public methods - needed for netstandard2.1
     }
 
@@ -95,7 +121,9 @@ public static class ResourceBuilderExtensions
     {
         Guard.ThrowIfNull(resourceBuilder);
 #pragma warning disable CA1062 // Validate arguments of public methods - needed for netstandard2.1
-        return resourceBuilder.AddResource(TelemetryResource);
+        return resourceBuilder
+            .AddResource(TelemetryResource)
+            .AddEntity(TelemetryEntity);
 #pragma warning restore CA1062 // Validate arguments of public methods - needed for netstandard2.1
     }
 
@@ -147,6 +175,8 @@ public static class ResourceBuilderExtensions
         return resourceBuilder
 #pragma warning restore CA1062 // Validate arguments of public methods - needed for netstandard2.1
             .AddDetectorInternal(sp => new OtelEnvResourceDetector(sp?.GetService<IConfiguration>() ?? configuration.Value))
-            .AddDetectorInternal(sp => new OtelServiceNameEnvVarDetector(sp?.GetService<IConfiguration>() ?? configuration.Value));
+            .AddDetectorInternal(sp => new OtelServiceNameEnvVarDetector(sp?.GetService<IConfiguration>() ?? configuration.Value))
+
+            .AddEntityDetector(new OtelEntitiesEnvVarDetector(configuration.Value));
     }
 }

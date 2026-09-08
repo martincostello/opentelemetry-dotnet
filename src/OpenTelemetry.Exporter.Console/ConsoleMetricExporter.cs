@@ -34,6 +34,11 @@ public class ConsoleMetricExporter : ConsoleExporter<Metric>
             {
                 this.WriteLine($"\tSchema URL: {resource.SchemaUrl}");
             }
+
+            foreach (var entity in resource.Entities)
+            {
+                this.WriteLine($"\tEntity: {entity.Type} (id: {string.Join(", ", entity.IdentifyingAttributes.Select(a => a.Key))})");
+            }
         }
 
         foreach (var metric in batch)
