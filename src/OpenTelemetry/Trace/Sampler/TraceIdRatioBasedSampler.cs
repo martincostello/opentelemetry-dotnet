@@ -1,6 +1,9 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
+#if NET9_0_OR_GREATER
+using System.Buffers;
+#endif
 using System.Globalization;
 using OpenTelemetry.Internal;
 
@@ -60,8 +63,23 @@ public sealed class TraceIdRatioBasedSampler
         // while allowing for a (very) small chance of *not* sampling if the id == Long.MAX_VALUE.
         // This is considered a reasonable trade-off for the simplicity/performance requirements (this
         // code is executed in-line for every Activity creation).
+#if NET9_0_OR_GREATER
+        // ActivityTraceId stores the id as a hex string which CopyTo decodes one
+        // character at a time, with a digit-or-letter branch per character that
+        // mispredicts on random ids. Only the first 8 bytes are needed, so decode
+        // just those 16 characters with the vectorized Convert.FromHexString.
+        // This optimization can be removed once https://github.com/dotnet/runtime/pull/134135
+        // is available in a future version of System.Diagnostics.DiagnosticSource.
+        Span<byte> traceIdBytes = stackalloc byte[8];
+        var status = Convert.FromHexString(samplingParameters.TraceId.ToHexString().AsSpan(0, 16), traceIdBytes, out _, out var bytesWritten);
+        if (status != OperationStatus.Done || bytesWritten != traceIdBytes.Length)
+        {
+            throw new ArgumentOutOfRangeException(nameof(samplingParameters), "The trace id is not a valid hex string.");
+        }
+#else
         Span<byte> traceIdBytes = stackalloc byte[16];
         samplingParameters.TraceId.CopyTo(traceIdBytes);
+#endif
         return new SamplingResult((GetLowerLong(traceIdBytes) & long.MaxValue) < this.idUpperBound);
     }
 

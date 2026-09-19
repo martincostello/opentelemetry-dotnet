@@ -6,6 +6,20 @@ Notes](../../RELEASENOTES.md).
 
 ## Unreleased
 
+* Reduced the cost of resolving the metric point for a set of tags by no longer
+  hashing the tag keys, which are shared by every point in a metric stream and
+  so add no entropy to the lookup.
+  ([#TODO](https://github.com/open-telemetry/opentelemetry-dotnet/pull/TODO))
+
+* Metric points created one after another are now placed in non-adjacent array
+  slots so that concurrent updates to different points do not contend on the
+  same cache line (false sharing).
+  ([#TODO](https://github.com/open-telemetry/opentelemetry-dotnet/pull/TODO))
+
+* Improved the performance of `TraceIdRatioBasedSampler` on .NET 9 and later by
+  decoding only the required prefix of the trace ID with `Convert.FromHexString`.
+  ([#TODO](https://github.com/open-telemetry/opentelemetry-dotnet/pull/TODO))
+
 ## 1.19.0
 
 Released 2026-Sep-18
