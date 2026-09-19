@@ -59,10 +59,20 @@ internal readonly struct Tags : IEquatable<Tags>
         // the entropy, are hashed in full. Tag sets that differ only in equal-length
         // keys with identical values collide on the hash and are then told apart by
         // Equals, which compares the keys first.
-        //
-        // The inputs are combined with a multiply-xor chain and a final avalanche
-        // step (murmur3 fmix32) so that the low bits used for bucketing depend on
-        // every input; this is cheaper than HashCode and available on every target.
+#if NET || NETSTANDARD2_1_OR_GREATER
+        HashCode hashCode = default;
+
+        for (var i = 0; i < keyValuePairs.Length; i++)
+        {
+            ref readonly var item = ref keyValuePairs[i];
+            hashCode.Add(item.Key.Length);
+            hashCode.Add(item.Value);
+        }
+
+        return hashCode.ToHashCode();
+#else
+        // Combine the inputs with a multiply-xor chain and a final avalanche step
+        // (murmur3 fmix32) so that the low bits used for bucketing depend on every input.
         var hash = (uint)keyValuePairs.Length;
 
         for (var i = 0; i < keyValuePairs.Length; i++)
@@ -85,6 +95,7 @@ internal readonly struct Tags : IEquatable<Tags>
         }
 
         return (int)hash;
+#endif
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

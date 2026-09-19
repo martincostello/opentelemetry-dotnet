@@ -6,9 +6,9 @@ Notes](../../RELEASENOTES.md).
 
 ## Unreleased
 
-* Reduced the cost of resolving the metric point for a set of tags by no longer
-  hashing the tag keys, which are shared by every point in a metric stream and
-  so add no entropy to the lookup.
+* Reduced the cost of resolving the metric point for a set of tags by hashing
+  only the length of each tag key rather than the key itself, since the keys are
+  shared by every point in a metric stream and so add no entropy to the lookup.
   ([#TODO](https://github.com/open-telemetry/opentelemetry-dotnet/pull/TODO))
 
 * Metric points created one after another are now placed in non-adjacent array
