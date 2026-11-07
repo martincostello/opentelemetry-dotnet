@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using OpenTelemetry.Exporter.Prometheus;
 using OpenTelemetry.Metrics;
 
 namespace Benchmarks.Exporter;
@@ -106,5 +107,9 @@ public class PrometheusAspNetCoreScrapeEndpointBenchmarks
     [Benchmark]
     public async Task<byte[]> ScrapeEndpoint()
         => await this.client!.GetByteArrayAsync(MetricsEndpoint).ConfigureAwait(false);
+
+    [Benchmark]
+    public string NegotiateHeader()
+        => PrometheusHeadersParser.Negotiate(this.Accept).MediaType;
 }
 #endif
