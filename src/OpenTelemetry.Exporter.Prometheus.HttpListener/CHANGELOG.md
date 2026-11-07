@@ -7,6 +7,9 @@ Notes](../../RELEASENOTES.md).
 
 ## Unreleased
 
+* Reduce allocations during Accept header negotiation by comparing media types
+  and escaping schemes as spans and selecting the preferred protocol in one pass.
+
 * Fixed OpenMetrics scrape responses containing a `# UNIT` line whose unit is
   not an underscore-separated suffix of the metric family name (for example
   `auth.failedlogins` with the unit `logins`), which caused scrapers such as
