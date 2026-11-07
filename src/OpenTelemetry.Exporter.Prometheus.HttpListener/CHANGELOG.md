@@ -9,6 +9,7 @@ Notes](../../RELEASENOTES.md).
 
 * Reduce allocations during Accept header negotiation by comparing media types
   and escaping schemes as spans and selecting the preferred protocol in one pass.
+  ([#7](https://github.com/martincostello/opentelemetry-dotnet/pull/7))
 
 * Fixed OpenMetrics scrape responses containing a `# UNIT` line whose unit is
   not an underscore-separated suffix of the metric family name (for example

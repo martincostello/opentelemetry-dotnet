@@ -9,6 +9,7 @@ Notes](../../RELEASENOTES.md).
 * Improve traceparent extraction throughput on modern .NET by validating
   hexadecimal identifiers with `SearchValues<char>` and avoiding intermediate
   byte decoding and re-encoding.
+  ([#7](https://github.com/martincostello/opentelemetry-dotnet/pull/7))
 
 ## 1.21.0-rc.1
 
